@@ -13,28 +13,28 @@ All culling algorithms have in common that they test all the scene's bounding bo
 
 The culling itself is implemented in the *cullingsystem.cpp/hpp* files. It may use SSBO or transform feedback to store the results. The results are always packed into bit-arrays to minimize traffic in the read-back case and maximize cache hits.
 
-- Frustum
+- **Frustum:**
  Just a simple frustum culling approach, this could probably done efficiently on the CPU using SIMD as well.
 
-- HiZ (occlusion)
+- **HiZ (occlusion):**
  This technique generates a mip-map chain of the depth buffer, and then checks the bounding box against the proper LOD. The LOD is chosen based on the area of the bounding box in screenspace. The core pinciple of the technique is also described [here](http://rastergrid.com/blog/2010/10/hierarchical-z-map-based-occlusion-culling/)
 
-- Raster (occlusion)
-As illustrated on [slide 51](http://on-demand.gputechconf.com/siggraph/2014/presentation/SG4117-OpenGL-Scene-Rendering-Techniques.pdf) this algorithm works by rasterizing the bounding box "invisibly". A geometry shader is used to generate bounding boxes. While color buffer writes are disabled our boxes are still rasterized and tested against the current depth-buffer. Those fragments which pass the depth-test, indicate that our bounding box is visible, and therefore flag the object in a visibility buffer: visible[objectid] = 1. Prior the operation that buffer is cleared to zero. This method typically yields better results than *HiZ* as the bounding boxes are tested more accurately as their orientation and dimension is better represented.
+- **Raster (occlusion):**
+ As illustrated on [slide 51](http://on-demand.gputechconf.com/siggraph/2014/presentation/SG4117-OpenGL-Scene-Rendering-Techniques.pdf) this algorithm works by rasterizing the bounding box "invisibly". A geometry shader is used to generate bounding boxes. While color buffer writes are disabled our boxes are still rasterized and tested against the current depth-buffer. Those fragments which pass the depth-test, indicate that our bounding box is visible, and therefore flag the object in a visibility buffer: visible[objectid] = 1. Prior the operation that buffer is cleared to zero. This method typically yields better results than *HiZ* as the bounding boxes are tested more accurately as their orientation and dimension is better represented.
 
 ![raster](https://github.com/nvpro-samples/gl_occlusion_culling/blob/master/doc/raster.png)
 
 ### Result Processing
 
-- Current Frame
-Here we accurately test using the latest information for the frame. That means the occlusion techniques also have to do a depth-pass (for which we use frustum check before).
+- **Current Frame:**
+ Here we accurately test using the latest information for the frame. That means the occlusion techniques also have to do a depth-pass (for which we use frustum check before).
 
-- Last Frame
-To avoid synchronization in a frame, we use the last frames results. At low frame-rates or high motion this can result in visible artifacts with objects "popping" up. 
+- **Last Frame:**
+ To avoid synchronization in a frame, we use the last frames results. At low frame-rates or high motion this can result in visible artifacts with objects "popping" up. 
 
 ![latency](https://github.com/nvpro-samples/gl_occlusion_culling/blob/master/doc/latencyissue.jpg)
 
-- Temporal Current Frame
+- **Temporal Current Frame:**
  This technique uses a temporal coherence to reduce the impact of depth-pass for the occlusion techniques. As described in [slide 52](http://on-demand.gputechconf.com/siggraph/2014/presentation/SG4117-OpenGL-Scene-Rendering-Techniques.pdf) we use the last frames result to limit the number of times an object is drawn to exactly 1 (classic depth-pass would be 2).
  - We start out by drawing the last frame's visible objects, this primes both our depth-buffer and shading
  - Next we test the visibility of objects against this depth-buffer
@@ -48,15 +48,15 @@ To avoid synchronization in a frame, we use the last frames results. At low fram
 ### Drawing Modes
 How the results are processed is also influenced by how we draw the scene. To allow drawing the entire scene with little state changes we leverage a trick to pass a unique vertex attribute per-drawcall using the *BaseInstance*. This attribute encodes our matrix index for the GL_TEXTURE_BUFFER, which sores all matrices. To make use of it, the vertex divisor for this attribute is set to a non zero value, since we don't really use instancing we sort of hijack the value. This technique is also described [here on slide 27](http://on-demand.gputechconf.com/gtc/2013/presentations/S3032-Advanced-Scenegraph-Rendering-Pipeline.pdf).
 
-- Standard CPU
-Here we read the results back to the host memory, which stalls the pipeline. The impact of this can be reduced a bit by using *Last Frame* results. Note that Quadro cards typically behave better than GeForce when it comes to read backs.
-- MultiDrawIndirect GPU
+- **Standard CPU:**
+We read the results back to the host memory, which stalls the pipeline. The impact of this can be reduced a bit by using *Last Frame* results. Note that Quadro cards typically behave better than GeForce when it comes to read backs.
+- **MultiDrawIndirect GPU:**
 This technique leverages the **ARB_multi_draw_indirect** and is free of synchronization. Instead of reading back the results, we manipulate the **GL_DRAW_INDIRECT_BUFFER**. The indirect buffer is cleared to 0, which means it would not render anything if executed. Then we use an **GL_ATOMIC_COUNTER_BUFFER** to append all the visible DrawIndirect structures into this buffer.
 > **Note**: Despite having the final drawindirect count available on the GPU through the atomic counter, the sample does not make use GL_ARB_indirect_parameters. Its usage comes with a certain overhead that may make things worse if the drawcalls have only low complexity. 
 > 
 > Usage of GL_ATOMIC_COUNTER_BUFFER to append the final buffer, means we lose the ordering of the original scene.
 
-- NVCmdList GPU
+- **NVCmdList GPU:**
 This new extension allows a faster and more flexible implementation of the culling. The regular Indirect method may suffer from running over lots of empty drawindirects and as mentioned aboive GL_ARB_indirect_parameters may also have its issues. Here we can use **GL_TERMINATE_SEQUENCE_COMMAND_NV** to much more quickly opt out of the indirect sequence. We also have greater flexibility when it comes to drawing the scene, as we could store objects in different buffers, can use UBO toggles for each object and so on.
 The technique works similar to the indirect method, however because commands have variable size, generating out command buffer is a bit harder, the positive side effect is that we preserve the original ordering.
  - Where indirect could straight record the drawindirect commands depending on their visibility, we first create an output buffer that stores all the sizes of visible commands. We output the original size of a command if it was visible, or zero if not.
@@ -65,7 +65,7 @@ The technique works similar to the indirect method, however because commands hav
 
  In this sample we only have one sequence, because we have one shader state. The code however is already prepared to cull multiple sequences, which is used in [gl cadscene rendertechniques](https://github.com/nvpro-samples/gl_cadscene_rendertechniques). The difference is that for multiple sequences the original start offset of a sequence must be preserved. This requires a bit of extra work as our scan operation for sake of maximizing parallelism, scans across all sequences and therefore does loose the information about sequence starts.
 
-- NVCmdList emulation
+- **NVCmdList emulation:**
 Emulates the above, by using a read-back of the GPU-generated token-buffer and interpreting the tokens using standard api calls.
 
 > The occlusion system handling for the commandlist is not done inside the occlusionsystem.cpp/hpp but instead the derived class *CullJobToken* is defined in the main sample file (occlusion-culling.cpp).
