@@ -142,8 +142,12 @@ Inside the tweak ui you can "freeze" a frame's culling results, and rotate camer
 
 ![frozen culling](https://github.com/nvpro-samples/gl_occlusion_culling/blob/master/doc/frozenculling.jpg)
 
+#### Building
+Ideally clone this and other interesting [nvpro-samples](https://github.com/nvpro-samples) repositories into a common subdirectory. You will always need [shared_sources](https://github.com/nvpro-samples/shared_sources) and on Windows [shared_external](https://github.com/nvpro-samples/shared_external). The shared directories are searched either as subdirectory of the sample or one directory up. It is recommended to use the [build_all](https://github.com/nvpro-samples/build_all) CMAKE as entry point, it will also give you options to enable/disable individual samples when creating the solutions.
+
 ### Related Samples
 [gl commandlist basic](https://github.com/nvpro-samples/gl_commandlist_basic) illustrates the core principle of the NV_command_list extension.
+
 [gl cadscene rendertechniques](https://github.com/nvpro-samples/gl_cadscene_rendertechniques) also uses the occlusion system of this sample, however in a more complex scenario, with multiple stateobjects and scene objects having their own VBO/IBO/UBO assignments. 
 
 ```
