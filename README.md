@@ -4,7 +4,7 @@ This sample implements a batched occlusion culling system, which is not based on
 
 It leverages the **ARB_multi_draw_indirect** (MDI) extension to implement latency-free occlusion culling. The MDI technique works well with a simplified scene setup where all geometry is stored in one big VBO/IBO pairing and no shader changes are done in between.
 
-As presented in the slides, this approach could be extended to use **NV_bindless_multi_draw_indirect** to render drawcalls using different VBO/IBOs in one go. With the upcoming **NV_command_list** however an even better approach is possible, which is also implemented in the sample and allows more flexible state changes. Please refer to [gl commandlist basic](https://github.com/nvpro-samples/gl_commandlist_basic) for an introduction on NV_command_list.
+The slides mention that this approach could be extended to use NV_bindless_multi_draw_indirect to render drawcalls using different VBO/IBOs in one go. With the upcoming **NV_command_list** however an even better approach is possible, which is also implemented in the sample and allows more flexible state changes. Please refer to [gl commandlist basic](https://github.com/nvpro-samples/gl_commandlist_basic) for an introduction on NV_command_list.
 
 > **Note:** For simplicity the sample uses one draw shader only, in a real-world use case one would have to organize multiple draw indirect culling lists per shader, or multiple NV_command_list token sequences with stateobjects. The latter is shown in [gl cadscene rendertechniques](https://github.com/nvpro-samples/gl_cadscene_rendertechniques)
 
@@ -57,7 +57,7 @@ This technique leverages the **ARB_multi_draw_indirect** and is free of synchron
 > Usage of GL_ATOMIC_COUNTER_BUFFER to append the final buffer, means we lose the ordering of the original scene.
 
 - NVCmdList GPU
-This new extension allows a faster and more flexible implementation of the culling. The regular Indirect method may suffer from running over lots of empty drawindirects and as mentioned aboive GL_ARB_indirect_parameters may also have its issues. Here we can use**GL_TERMINATE_SEQUENCE_COMMAND_NV** to much more quickly opt out of the indirect sequence. We also have greater flexibility when it comes to drawing the scene, as we could store objects in different buffers, can use UBO toggles for each object and so on.
+This new extension allows a faster and more flexible implementation of the culling. The regular Indirect method may suffer from running over lots of empty drawindirects and as mentioned aboive GL_ARB_indirect_parameters may also have its issues. Here we can use **GL_TERMINATE_SEQUENCE_COMMAND_NV** to much more quickly opt out of the indirect sequence. We also have greater flexibility when it comes to drawing the scene, as we could store objects in different buffers, can use UBO toggles for each object and so on.
 The technique works similar to the indirect method, however because commands have variable size, generating out command buffer is a bit harder, the positive side effect is that we preserve the original ordering.
  - Where indirect could straight record the drawindirect commands depending on their visibility, we first create an output buffer that stores all the sizes of visible commands. We output the original size of a command if it was visible, or zero if not.
  - A scan operation on these output sizes, creates our output offsets using a prefix sum approach. There is plenty literature on the web for parallel friendly scans, our implementation is derived from [CUB](http://nvlabs.github.io/cub/).
