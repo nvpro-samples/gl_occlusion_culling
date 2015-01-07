@@ -152,10 +152,9 @@ namespace nvtoken
     const GLubyte* streamEnd = current + streamSize;
 
     while (current < streamEnd){
-      const CommandHeaderNV*    header  = (const CommandHeaderNV*)current;
-      const void*               data    = (const void*)(header+1);
+      const GLuint*             header  = (const GLuint*)current;
 
-      GLenum type = nvtokenHeaderCommand(header->encoded);
+      GLenum type = nvtokenHeaderCommand(*header);
       stats[type]++;
 
       current += s_nvcmdlist_headerSizes[type];
@@ -184,10 +183,9 @@ namespace nvtoken
     else    modeSpecial = mode;
 
     while (current < streamEnd){
-      const CommandHeaderNV*    header  = (const CommandHeaderNV*)current;
-      const void*               data    = (const void*)(header+1);
+      const GLuint*             header  = (const GLuint*)current;
 
-      GLenum cmdtype = nvtokenHeaderCommand(header->encoded);
+      GLenum cmdtype = nvtokenHeaderCommand(*header);
       // if you always use emulation on non-native tokens you can use 
       // cmdtype = nvtokenHeaderCommandSW(header->encoded)
       switch(cmdtype){
@@ -202,31 +200,31 @@ namespace nvtoken
         break;
       case GL_DRAW_ELEMENTS_COMMAND_NV:
         {
-          const DrawElementsCommandNV* cmd = (const DrawElementsCommandNV*)data;
+          const DrawElementsCommandNV* cmd = (const DrawElementsCommandNV*)current;
           glDrawElementsBaseVertex(mode, cmd->count, type, (const GLvoid*)(cmd->firstIndex * sizeof(GLuint)), cmd->baseVertex);
         }
         break;
       case GL_DRAW_ARRAYS_COMMAND_NV:
         {
-          const DrawArraysCommandNV* cmd = (const DrawArraysCommandNV*)data;
+          const DrawArraysCommandNV* cmd = (const DrawArraysCommandNV*)current;
           glDrawArrays(mode, cmd->first, cmd->count);
         }
         break;
       case GL_DRAW_ELEMENTS_STRIP_COMMAND_NV:
         {
-          const DrawElementsCommandNV* cmd = (const DrawElementsCommandNV*)data;
+          const DrawElementsCommandNV* cmd = (const DrawElementsCommandNV*)current;
           glDrawElementsBaseVertex(modeStrip, cmd->count, type, (const GLvoid*)(cmd->firstIndex * sizeof(GLuint)), cmd->baseVertex);
         }
         break;
       case GL_DRAW_ARRAYS_STRIP_COMMAND_NV:
         {
-          const DrawArraysCommandNV* cmd = (const DrawArraysCommandNV*)data;
+          const DrawArraysCommandNV* cmd = (const DrawArraysCommandNV*)current;
           glDrawArrays(modeStrip, cmd->first, cmd->count);
         }
         break;
       case GL_DRAW_ELEMENTS_INSTANCED_COMMAND_NV:
         {
-          const DrawElementsInstancedCommandNV* cmd = (const DrawElementsInstancedCommandNV*)data;
+          const DrawElementsInstancedCommandNV* cmd = (const DrawElementsInstancedCommandNV*)current;
 
           assert (cmd->mode == mode || cmd->mode == modeStrip || cmd->mode == modeSpecial);
 
@@ -235,7 +233,7 @@ namespace nvtoken
         break;
       case GL_DRAW_ARRAYS_INSTANCED_COMMAND_NV:
         {
-          const DrawArraysInstancedCommandNV* cmd = (const DrawArraysInstancedCommandNV*)data;
+          const DrawArraysInstancedCommandNV* cmd = (const DrawArraysInstancedCommandNV*)current;
 
           assert (cmd->mode == mode || cmd->mode == modeStrip || cmd->mode == modeSpecial);
 
@@ -244,13 +242,13 @@ namespace nvtoken
         break;
       case GL_ELEMENT_ADDRESS_COMMAND_NV:
         {
-          const ElementAddressCommandNV* cmd = (const ElementAddressCommandNV*)data;
+          const ElementAddressCommandNV* cmd = (const ElementAddressCommandNV*)current;
           type = cmd->typeSizeInByte == 4 ? GL_UNSIGNED_INT : GL_UNSIGNED_SHORT;
           if (s_nvcmdlist_bindless){
-            glBufferAddressRangeNV(GL_ELEMENT_ARRAY_ADDRESS_NV, 0, cmd->address, 0x7FFFFFFF);
+            glBufferAddressRangeNV(GL_ELEMENT_ARRAY_ADDRESS_NV, 0, GLuint64(cmd->addressLo) | (GLuint64(cmd->addressHi)<<32), 0x7FFFFFFF);
           }
           else{
-            const ElementAddressCommandEMU* cmd = (const ElementAddressCommandEMU*)data;
+            const ElementAddressCommandEMU* cmd = (const ElementAddressCommandEMU*)current;
             glBindBuffer(GL_ELEMENT_ARRAY_BUFFER, cmd->buffer);
           }
         }
@@ -258,11 +256,11 @@ namespace nvtoken
       case GL_ATTRIBUTE_ADDRESS_COMMAND_NV:
         {
           if (s_nvcmdlist_bindless){
-            const AttributeAddressCommandNV* cmd = (const AttributeAddressCommandNV*)data;
-            glBufferAddressRangeNV(GL_VERTEX_ATTRIB_ARRAY_ADDRESS_NV, cmd->index, cmd->address, 0x7FFFFFFF);
+            const AttributeAddressCommandNV* cmd = (const AttributeAddressCommandNV*)current;
+            glBufferAddressRangeNV(GL_VERTEX_ATTRIB_ARRAY_ADDRESS_NV, cmd->index, GLuint64(cmd->addressLo) | (GLuint64(cmd->addressHi)<<32), 0x7FFFFFFF);
           }
           else{
-            const AttributeAddressCommandEMU* cmd = (const AttributeAddressCommandEMU*)data;
+            const AttributeAddressCommandEMU* cmd = (const AttributeAddressCommandEMU*)current;
             glBindVertexBuffer(cmd->index, cmd->buffer, cmd->offset, state.vertexformat.bindings[cmd->index].stride);
           }
         }
@@ -270,24 +268,24 @@ namespace nvtoken
       case GL_UNIFORM_ADDRESS_COMMAND_NV:
         {
            if (s_nvcmdlist_bindless){
-            const UniformAddressCommandNV* cmd = (const UniformAddressCommandNV*)data;
-            glBufferAddressRangeNV(GL_UNIFORM_BUFFER_ADDRESS_NV, cmd->index, cmd->address, 0x10000);
+            const UniformAddressCommandNV* cmd = (const UniformAddressCommandNV*)current;
+            glBufferAddressRangeNV(GL_UNIFORM_BUFFER_ADDRESS_NV, cmd->index, GLuint64(cmd->addressLo) | (GLuint64(cmd->addressHi)<<32), 0x10000);
           }
           else{
-            const UniformAddressCommandEMU* cmd = (const UniformAddressCommandEMU*)data;
+            const UniformAddressCommandEMU* cmd = (const UniformAddressCommandEMU*)current;
             glBindBufferRange(GL_UNIFORM_BUFFER,cmd->index, cmd->buffer, cmd->offset256 * 256, cmd->size4*4);
           }
         }
         break;
       case GL_BLEND_COLOR_COMMAND_NV:
         {
-          const BlendColorCommandNV* cmd = (const BlendColorCommandNV*)data;
+          const BlendColorCommandNV* cmd = (const BlendColorCommandNV*)current;
           glBlendColor(cmd->red,cmd->green,cmd->blue,cmd->alpha);
         }
         break;
       case GL_STENCIL_REF_COMMAND_NV:
         {
-          const StencilRefCommandNV* cmd = (const StencilRefCommandNV*)data;
+          const StencilRefCommandNV* cmd = (const StencilRefCommandNV*)current;
           glStencilFuncSeparate(GL_FRONT, state.stencil.funcs[StateSystem::FACE_FRONT].func, cmd->frontStencilRef, state.stencil.funcs[StateSystem::FACE_FRONT].mask);
           glStencilFuncSeparate(GL_BACK,  state.stencil.funcs[StateSystem::FACE_BACK ].func, cmd->backStencilRef,  state.stencil.funcs[StateSystem::FACE_BACK ].mask);
         }
@@ -295,41 +293,40 @@ namespace nvtoken
 
       case GL_LINE_WIDTH_COMMAND_NV:
         {
-          const LineWidthCommandNV* cmd = (const LineWidthCommandNV*)data;
+          const LineWidthCommandNV* cmd = (const LineWidthCommandNV*)current;
           glLineWidth(cmd->lineWidth);
         }
         break;
       case GL_POLYGON_OFFSET_COMMAND_NV:
         {
-          const PolygonOffsetCommandNV* cmd = (const PolygonOffsetCommandNV*)data;
+          const PolygonOffsetCommandNV* cmd = (const PolygonOffsetCommandNV*)current;
           glPolygonOffset(cmd->scale,cmd->bias);
         }
         break;
       case GL_ALPHA_REF_COMMAND_NV:
         {
-          const AlphaRefCommandNV* cmd = (const AlphaRefCommandNV*)data;
+          const AlphaRefCommandNV* cmd = (const AlphaRefCommandNV*)current;
           glAlphaFunc(state.alpha.mode, cmd->alphaRef);
         }
         break;
       case GL_VIEWPORT_COMMAND_NV:
         {
-          const ViewportCommandNV* cmd = (const ViewportCommandNV*)data;
+          const ViewportCommandNV* cmd = (const ViewportCommandNV*)current;
           glViewport(cmd->x, cmd->y, cmd->width, cmd->height);
         }
         break;
       case GL_SCISSOR_COMMAND_NV:
         {
-          const ScissorCommandNV* cmd = (const ScissorCommandNV*)data;
+          const ScissorCommandNV* cmd = (const ScissorCommandNV*)current;
           glScissor(cmd->x,cmd->y,cmd->width,cmd->height);
         }
         break;
       case GL_FRONTFACE_COMMAND_NV:
         {
-          FrontFaceCommandNV* cmd = (FrontFaceCommandNV*)data;
+          FrontFaceCommandNV* cmd = (FrontFaceCommandNV*)current;
           glFrontFace(cmd->frontFace?GL_CW:GL_CCW);
         }
         break;
-
       }
 
 

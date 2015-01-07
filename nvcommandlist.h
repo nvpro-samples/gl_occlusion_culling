@@ -69,24 +69,30 @@
 #define GL_SCISSOR_COMMAND_NV                               0x0011
 #define GL_FRONTFACE_COMMAND_NV                             0x0012
 
-#pragma pack(push,1)
 
   typedef struct {
-    GLuint      encoded;
-  } CommandHeaderNV;
+    GLuint  header;
+  } TerminateSequenceCommandNV;
+
+  typedef struct {
+    GLuint  header;
+  } NOPCommandNV;
 
   typedef  struct {
+    GLuint  header;
     GLuint  count;
     GLuint  firstIndex;
     GLuint  baseVertex;
   } DrawElementsCommandNV;
 
   typedef  struct {
+    GLuint  header;
     GLuint  count;
     GLuint  first;
   } DrawArraysCommandNV;
 
   typedef  struct {
+    GLuint  header;
     GLenum  mode;
     GLuint  count;
     GLuint  instanceCount;
@@ -96,6 +102,7 @@
   } DrawElementsInstancedCommandNV;
 
   typedef  struct {
+    GLuint  header;
     GLenum  mode;
     GLuint  count;
     GLuint  instanceCount;
@@ -104,66 +111,79 @@
   } DrawArraysInstancedCommandNV;
 
   typedef struct {
-    GLuint64 address;
-    GLuint   typeSizeInByte;
+    GLuint  header;
+    GLuint  addressLo;
+    GLuint  addressHi;
+    GLuint  typeSizeInByte;
   } ElementAddressCommandNV;
 
   typedef struct {
-    GLuint   index;
-    GLuint64 address;
+    GLuint  header;
+    GLuint  index;
+    GLuint  addressLo;
+    GLuint  addressHi;
   } AttributeAddressCommandNV;
 
   typedef struct {
-    GLushort index;
-    GLushort stage;
-    GLuint64 address;
+    GLuint    header;
+    GLushort  index;
+    GLushort  stage;
+    GLuint    addressLo;
+    GLuint    addressHi;
   } UniformAddressCommandNV;
 
   typedef struct {
-    float red;
-    float green;
-    float blue;
-    float alpha;
+    GLuint    header;
+    float     red;
+    float     green;
+    float     blue;
+    float     alpha;
   } BlendColorCommandNV;
 
   typedef struct {
-    GLuint frontStencilRef;
-    GLuint backStencilRef;
+    GLuint  header;
+    GLuint  frontStencilRef;
+    GLuint  backStencilRef;
   } StencilRefCommandNV;
 
   typedef struct {
-    float lineWidth;
+    GLuint  header;
+    float   lineWidth;
   } LineWidthCommandNV;
 
   typedef struct {
-    float scale;
-    float bias;
+    GLuint  header;
+    float   scale;
+    float   bias;
   } PolygonOffsetCommandNV;
 
   typedef struct {
-    float alphaRef;
+    GLuint  header;
+    float   alphaRef;
   } AlphaRefCommandNV;
 
   typedef struct {
-    GLuint x;
-    GLuint y;
-    GLuint width;
-    GLuint height;
+    GLuint  header;
+    GLuint  x;
+    GLuint  y;
+    GLuint  width;
+    GLuint  height;
   } ViewportCommandNV;
 
   typedef struct {
-    GLuint x;
-    GLuint y;
-    GLuint width;
-    GLuint height;
+    GLuint  header;
+    GLuint  x;
+    GLuint  y;
+    GLuint  width;
+    GLuint  height;
   } ScissorCommandNV;
 
   typedef struct {
-    GLuint frontFace; // 0 for CW, 1 for CCW
+    GLuint  header;
+    GLuint  frontFace; // 0 for CW, 1 for CCW
   } FrontFaceCommandNV;
 
 
-#pragma pack(pop)
 
 typedef void (GLEXT_APIENTRY *PFNGLCREATESTATESNVPROC)(GLsizei n, GLuint *states);
 typedef void (GLEXT_APIENTRY *PFNGLDELETESTATESNVPROC)(GLsizei n, const GLuint *states);

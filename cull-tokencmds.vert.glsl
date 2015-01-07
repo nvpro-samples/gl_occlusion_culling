@@ -33,7 +33,7 @@ layout(std430,binding=4)  readonly buffer cullScanOffsetBuffer {
   uint cullScanOffsets[];
 };
 
-uint getOffset( int id, uint scan, uint size, bool exclusive=true)
+uint getOffset( int id, uint scan, uint size, bool exclusive)
 {
   int scanBatch = id / SCAN_BATCHSIZE;
   uint  scanOffset  = scan;
@@ -45,7 +45,7 @@ uint getOffset( int id, uint scan, uint size, bool exclusive=true)
   return scanOffset;
 }
 
-uint getOffset( int id, bool exclusive=true)
+uint getOffset( int id, bool exclusive)
 {
   return getOffset(id, cullScan[id], cullSizes[id], exclusive);
 }
@@ -57,10 +57,10 @@ void main ()
   if (cmdCullSize > 0)
   {
     // cullOffset goes across "stateobject" sequences
-    uint cullOffset = getOffset(gl_VertexID + startID,cmdCullScan,cmdCullSize);
+    uint cullOffset = getOffset(gl_VertexID + startID,cmdCullScan,cmdCullSize,true);
   
     // where the current sequence starts
-    uint startCullOffset = getOffset(startID);
+    uint startCullOffset = getOffset(startID, true);
   
     // rebase from where it should start
     uint outOffset    = startOffset + (cullOffset - startCullOffset);
@@ -84,7 +84,7 @@ void main ()
   if (gl_VertexID == 0)
   {
     // add terminator if sequence not original
-    uint lastOffset = getOffset(endID, false) + getOffset(startID);
+    uint lastOffset = getOffset(endID, false) + getOffset(startID, true);
     if (lastOffset != endOffset) {
       outcmds[lastOffset] = terminateCmd;
     }

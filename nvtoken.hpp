@@ -125,50 +125,52 @@ namespace nvtoken
 #pragma pack(push,1)
 
   typedef struct {
+    GLuint   header;
     GLuint   buffer;
     GLuint   _pad;
     GLuint   typeSizeInByte;
   } ElementAddressCommandEMU;
 
   typedef struct {
+    GLuint   header;
     GLuint   index;
     GLuint   buffer;
     GLuint   offset;
   } AttributeAddressCommandEMU;
 
   typedef struct {
-    GLushort   index;
-    GLushort   stage;
-    GLuint     buffer;
-    GLushort   offset256;
-    GLushort   size4;
+    GLuint      header;
+    GLushort    index;
+    GLushort    stage;
+    GLuint      buffer;
+    GLushort    offset256;
+    GLushort    size4;
   } UniformAddressCommandEMU;
 
 
   struct NVTokenNop {
     static const GLenum   ID = GL_NOP_COMMAND_NV;
 
-    CommandHeaderNV      header;
+    NOPCommandNV      cmd;
 
     NVTokenNop() {
-      header.encoded  = s_nvcmdlist_header[ID];
+      cmd.header  = s_nvcmdlist_header[ID];
     }
   };
 
   struct NVTokenTerminate {
     static const GLenum   ID = GL_TERMINATE_SEQUENCE_COMMAND_NV;
 
-    CommandHeaderNV      header;
+    TerminateSequenceCommandNV      cmd;
 
     NVTokenTerminate() {
-      header.encoded  = s_nvcmdlist_header[ID];
+      cmd.header  = s_nvcmdlist_header[ID];
     }
   };
 
   struct NVTokenDrawElemsInstanced {
     static const GLenum   ID = GL_DRAW_ELEMENTS_INSTANCED_COMMAND_NV;
 
-    CommandHeaderNV                  header;
     DrawElementsInstancedCommandNV   cmd;
 
     NVTokenDrawElemsInstanced() {
@@ -179,7 +181,7 @@ namespace nvtoken
       cmd.count = 0;
       cmd.instanceCount = 1;
 
-      header.encoded  = s_nvcmdlist_header[ID];
+      cmd.header  = s_nvcmdlist_header[ID];
     }
     
     void setMode(GLenum primmode) {
@@ -202,7 +204,6 @@ namespace nvtoken
   struct NVTokenDrawArraysInstanced {
     static const GLenum   ID = GL_DRAW_ARRAYS_INSTANCED_COMMAND_NV;
 
-    CommandHeaderNV                       header;
     DrawArraysInstancedCommandNV          cmd;
 
     NVTokenDrawArraysInstanced() {
@@ -212,7 +213,7 @@ namespace nvtoken
       cmd.count = 0;
       cmd.instanceCount = 1;
 
-      header.encoded  = s_nvcmdlist_header[ID];
+      cmd.header  = s_nvcmdlist_header[ID];
     }
     
     void setMode(GLenum primmode) {
@@ -234,7 +235,6 @@ namespace nvtoken
   struct NVTokenDrawElems {
     static const GLenum   ID = GL_DRAW_ELEMENTS_COMMAND_NV;
 
-    CommandHeaderNV         header;
     DrawElementsCommandNV   cmd;
 
     NVTokenDrawElems() {
@@ -242,7 +242,7 @@ namespace nvtoken
       cmd.firstIndex = 0;
       cmd.count = 0;
 
-      header.encoded  = s_nvcmdlist_header[ID];
+      cmd.header  = s_nvcmdlist_header[ID];
     }
 
     void setParams(GLuint count, GLuint firstIndex=0, GLuint baseVertex=0)
@@ -258,11 +258,11 @@ namespace nvtoken
       if (primmode == GL_LINE_STRIP || primmode == GL_TRIANGLE_STRIP || primmode == GL_QUAD_STRIP ||
           primmode == GL_LINE_STRIP_ADJACENCY || primmode == GL_TRIANGLE_STRIP_ADJACENCY)
       {
-        header.encoded = s_nvcmdlist_header[GL_DRAW_ELEMENTS_STRIP_COMMAND_NV];
+        cmd.header = s_nvcmdlist_header[GL_DRAW_ELEMENTS_STRIP_COMMAND_NV];
       }
       else
       {
-        header.encoded = s_nvcmdlist_header[GL_DRAW_ELEMENTS_COMMAND_NV];
+        cmd.header = s_nvcmdlist_header[GL_DRAW_ELEMENTS_COMMAND_NV];
       }
     }
   };
@@ -270,14 +270,13 @@ namespace nvtoken
   struct NVTokenDrawArrays {
     static const GLenum   ID = GL_DRAW_ARRAYS_COMMAND_NV;
 
-    CommandHeaderNV       header;
     DrawArraysCommandNV   cmd;
 
     NVTokenDrawArrays() {
       cmd.first = 0;
       cmd.count = 0;
 
-      header.encoded  = s_nvcmdlist_header[ID];
+      cmd.header  = s_nvcmdlist_header[ID];
     }
 
     void setParams(GLuint count, GLuint first=0)
@@ -292,11 +291,11 @@ namespace nvtoken
       if (primmode == GL_LINE_STRIP || primmode == GL_TRIANGLE_STRIP || primmode == GL_QUAD_STRIP ||
           primmode == GL_LINE_STRIP_ADJACENCY || primmode == GL_TRIANGLE_STRIP_ADJACENCY)
       {
-        header.encoded = s_nvcmdlist_header[GL_DRAW_ARRAYS_STRIP_COMMAND_NV];
+        cmd.header = s_nvcmdlist_header[GL_DRAW_ARRAYS_STRIP_COMMAND_NV];
       }
       else
       {
-        header.encoded = s_nvcmdlist_header[GL_DRAW_ARRAYS_COMMAND_NV];
+        cmd.header = s_nvcmdlist_header[GL_DRAW_ARRAYS_COMMAND_NV];
       }
     }
   };
@@ -304,7 +303,6 @@ namespace nvtoken
   struct NVTokenDrawElemsStrip {
     static const GLenum   ID = GL_DRAW_ELEMENTS_STRIP_COMMAND_NV;
 
-    CommandHeaderNV         header;
     DrawElementsCommandNV   cmd;
 
     NVTokenDrawElemsStrip() {
@@ -312,7 +310,7 @@ namespace nvtoken
       cmd.firstIndex = 0;
       cmd.count = 0;
 
-      header.encoded  = s_nvcmdlist_header[ID];
+      cmd.header  = s_nvcmdlist_header[ID];
     }
 
     void setParams(GLuint count, GLuint firstIndex=0, GLuint baseVertex=0)
@@ -326,14 +324,13 @@ namespace nvtoken
   struct NVTokenDrawArraysStrip {
     static const GLenum   ID = GL_DRAW_ARRAYS_STRIP_COMMAND_NV;
 
-    CommandHeaderNV       header;
     DrawArraysCommandNV   cmd;
 
     NVTokenDrawArraysStrip() {
       cmd.first = 0;
       cmd.count = 0;
 
-      header.encoded  = s_nvcmdlist_header[ID];
+      cmd.header  = s_nvcmdlist_header[ID];
     }
 
     void setParams(GLuint count, GLuint first=0)
@@ -346,7 +343,6 @@ namespace nvtoken
   struct NVTokenVbo {
     static const GLenum   ID = GL_ATTRIBUTE_ADDRESS_COMMAND_NV;
 
-    CommandHeaderNV               header;
     union {
       AttributeAddressCommandNV   cmd;
       AttributeAddressCommandEMU  cmdEMU;
@@ -359,7 +355,9 @@ namespace nvtoken
     void setBuffer(GLuint buffer, GLuint64 address, GLuint offset)
     {
       if (s_nvcmdlist_bindless){
-        cmd.address = address + offset;
+        address += offset;
+        cmd.addressLo = GLuint(address & 0xFFFFFFFF);
+        cmd.addressHi = GLuint(address >> 32);
       }
       else{
         cmdEMU.buffer = buffer;
@@ -368,14 +366,13 @@ namespace nvtoken
     }
 
     NVTokenVbo() {
-      header.encoded  = s_nvcmdlist_header[ID];
+      cmd.header  = s_nvcmdlist_header[ID];
     }
   };
 
   struct NVTokenIbo {
     static const GLenum   ID = GL_ELEMENT_ADDRESS_COMMAND_NV;
 
-    CommandHeaderNV               header;
     union{
       ElementAddressCommandNV     cmd;
       ElementAddressCommandEMU    cmdEMU;
@@ -399,7 +396,8 @@ namespace nvtoken
     void setBuffer(GLuint buffer, GLuint64 address)
     {
       if (s_nvcmdlist_bindless){
-        cmd.address = address;
+        cmd.addressLo = GLuint(address & 0xFFFFFFFF);
+        cmd.addressHi = GLuint(address >> 32);
       }
       else{
         cmdEMU.buffer = buffer;
@@ -408,14 +406,13 @@ namespace nvtoken
     }
     
     NVTokenIbo() {
-      header.encoded  = s_nvcmdlist_header[ID];
+      cmd.header  = s_nvcmdlist_header[ID];
     }
   };
 
   struct NVTokenUbo {
     static const GLenum   ID = GL_UNIFORM_ADDRESS_COMMAND_NV;
 
-    CommandHeaderNV           header;
     union{
       UniformAddressCommandNV   cmd;
       UniformAddressCommandEMU  cmdEMU;
@@ -425,7 +422,9 @@ namespace nvtoken
     {
       assert(size % 4 == 0 && offset % 256 == 0);
       if (s_nvcmdlist_bindless){
-        cmd.address = address + offset;
+        address += offset;
+        cmd.addressLo = GLuint(address & 0xFFFFFFFF);
+        cmd.addressHi = GLuint(address >> 32);
       }
       else{
         cmdEMU.buffer = buffer;
@@ -440,95 +439,87 @@ namespace nvtoken
     }
     
     NVTokenUbo() {
-      header.encoded  = s_nvcmdlist_header[ID];
+      cmd.header  = s_nvcmdlist_header[ID];
     }
   };
 
   struct NVTokenBlendColor{
     static const GLenum   ID = GL_BLEND_COLOR_COMMAND_NV;
 
-    CommandHeaderNV         header;
     BlendColorCommandNV     cmd;
 
     NVTokenBlendColor() {
-      header.encoded  = s_nvcmdlist_header[ID];
+      cmd.header  = s_nvcmdlist_header[ID];
     }
   };
 
   struct NVTokenStencilRef{
     static const GLenum   ID = GL_STENCIL_REF_COMMAND_NV;
 
-    CommandHeaderNV     header;
     StencilRefCommandNV cmd;
 
     NVTokenStencilRef() {
-      header.encoded  = s_nvcmdlist_header[ID];
+      cmd.header  = s_nvcmdlist_header[ID];
     }
   } ;
 
   struct NVTokenLineWidth{
     static const GLenum   ID = GL_LINE_WIDTH_COMMAND_NV;
 
-    CommandHeaderNV     header;
     LineWidthCommandNV  cmd;
 
     NVTokenLineWidth() {
-      header.encoded  = s_nvcmdlist_header[ID];
+      cmd.header  = s_nvcmdlist_header[ID];
     }
   };
 
   struct NVTokenPolygonOffset{
     static const GLenum   ID = GL_POLYGON_OFFSET_COMMAND_NV;
 
-    CommandHeaderNV         header;
     PolygonOffsetCommandNV  cmd;
 
     NVTokenPolygonOffset() {
-      header.encoded  = s_nvcmdlist_header[ID];
+      cmd.header  = s_nvcmdlist_header[ID];
     }
   };
 
   struct NVTokenAlphaRef{
     static const GLenum   ID = GL_ALPHA_REF_COMMAND_NV;
 
-    CommandHeaderNV   header;
     AlphaRefCommandNV cmd;
 
     NVTokenAlphaRef() {
-      header.encoded  = s_nvcmdlist_header[ID];
+      cmd.header  = s_nvcmdlist_header[ID];
     }
   };
 
   struct NVTokenViewport{
     static const GLenum   ID = GL_VIEWPORT_COMMAND_NV;
 
-    CommandHeaderNV   header;
     ViewportCommandNV cmd;
 
     NVTokenViewport() {
-      header.encoded  = s_nvcmdlist_header[ID];
+      cmd.header  = s_nvcmdlist_header[ID];
     }
   };
 
   struct NVTokenScissor {
     static const GLenum   ID = GL_SCISSOR_COMMAND_NV;
 
-    CommandHeaderNV   header;
     ScissorCommandNV  cmd;
 
     NVTokenScissor() {
-      header.encoded  = s_nvcmdlist_header[ID];
+      cmd.header  = s_nvcmdlist_header[ID];
     }
   };
 
   struct NVTokenFrontFace {
     static const GLenum   ID = GL_FRONTFACE_COMMAND_NV;
 
-    CommandHeaderNV     header;
     FrontFaceCommandNV  cmd;
 
     NVTokenFrontFace() {
-      header.encoded  = s_nvcmdlist_header[ID];
+      cmd.header  = s_nvcmdlist_header[ID];
     }
 
     void setFrontFace(GLenum winding){
