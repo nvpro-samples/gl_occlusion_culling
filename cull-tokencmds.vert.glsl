@@ -50,6 +50,17 @@ uint getOffset( int id, bool exclusive)
   return getOffset(id, cullScan[id], cullSizes[id], exclusive);
 }
 
+uint rebaseOffset(uint cullOffset)
+{
+  // where the current sequence starts
+  uint startCullOffset = getOffset(startID, true);
+
+  // rebase from where it should start
+  uint outOffset    = startOffset + (cullOffset - startCullOffset);
+  
+  return outOffset;
+}
+
 #define DEBUG 0
 
 void main ()
@@ -57,17 +68,13 @@ void main ()
   if (cmdCullSize > 0)
   {
     // cullOffset goes across "stateobject" sequences
-    uint cullOffset = getOffset(gl_VertexID + startID,cmdCullScan,cmdCullSize,true);
+    uint cullOffset = getOffset(gl_VertexID,cmdCullScan,cmdCullSize,true);
   
-    // where the current sequence starts
-    uint startCullOffset = getOffset(startID, true);
-  
-    // rebase from where it should start
-    uint outOffset    = startOffset + (cullOffset - startCullOffset);
+    uint outOffset  = rebaseOffset(cullOffset);
     
   #if DEBUG
-    outcmds[(gl_VertexID+startID)*2+0] = outOffset;
-    outcmds[(gl_VertexID+startID)*2+1] = cmdOffset;
+    outcmds[(gl_VertexID)*2+0] = outOffset;
+    outcmds[(gl_VertexID)*2+1] = cmdOffset;
   #else
     for (uint i = 0; i < cmdCullSize; i++){
       outcmds[outOffset+i] = incmds[cmdOffset+i];
@@ -76,22 +83,24 @@ void main ()
   }
 #if DEBUG
   else {
-    outcmds[(gl_VertexID+startID)*2+0] = ~0;
-    outcmds[(gl_VertexID+startID)*2+1] = cmdOffset;
+    outcmds[(gl_VertexID)*2+0] = ~0;
+    outcmds[(gl_VertexID)*2+1] = cmdOffset;
   }
 #endif
 
-  if (gl_VertexID == 0)
+  if (gl_VertexID == startID)
   {
     // add terminator if sequence not original
-    uint lastOffset = getOffset(endID, false) + getOffset(startID, true);
+    uint lastOffset = rebaseOffset( getOffset(endID, false) );
     if (lastOffset != endOffset) {
+#if !DEBUG
       outcmds[lastOffset] = terminateCmd;
+#endif
     }
     
-#if DEBUG
-    outcmds[(gl_VertexID+startID)*2+0] = lastOffset;
-    outcmds[(gl_VertexID+startID)*2+1] = endOffset;
+#if DEBUG && 0
+    outcmds[(startID)*2+0] = lastOffset;
+    outcmds[(startID)*2+1] = endOffset;
 #endif
   }
 }
