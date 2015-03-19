@@ -4,7 +4,7 @@ This sample implements a batched occlusion culling system, which is not based on
 
 It leverages the **ARB_multi_draw_indirect** (MDI) extension to implement latency-free occlusion culling. The MDI technique works well with a simplified scene setup where all geometry is stored in one big VBO/IBO pairing and no shader changes are done in between.
 
-The slides mention that this approach could be extended to use NV_bindless_multi_draw_indirect to render drawcalls using different VBO/IBOs in one go. With the upcoming **NV_command_list** however an even better approach is possible, which is also implemented in the sample and allows more flexible state changes. Please refer to [gl commandlist basic](https://github.com/nvpro-samples/gl_commandlist_basic) for an introduction on NV_command_list.
+The slides mention that this approach could be extended to use NV_bindless_multi_draw_indirect to render drawcalls using different VBO/IBOs in one go. With the **NV_command_list** however an even better approach is possible, which is also implemented in the sample and allows more flexible state changes. Please refer to [gl commandlist basic](https://github.com/nvpro-samples/gl_commandlist_basic) for an introduction on NV_command_list.
 
 > **Note:** For simplicity the sample uses one draw shader only, in a real-world use case one would have to organize multiple draw indirect culling lists per shader, or multiple NV_command_list token sequences with stateobjects. The latter is shown in [gl cadscene rendertechniques](https://github.com/nvpro-samples/gl_cadscene_rendertechniques)
 
