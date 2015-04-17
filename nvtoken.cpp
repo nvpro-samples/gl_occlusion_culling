@@ -321,7 +321,7 @@ namespace nvtoken
           glScissor(cmd->x,cmd->y,cmd->width,cmd->height);
         }
         break;
-      case GL_FRONTFACE_COMMAND_NV:
+      case GL_FRONT_FACE_COMMAND_NV:
         {
           FrontFaceCommandNV* cmd = (FrontFaceCommandNV*)current;
           glFrontFace(cmd->frontFace?GL_CW:GL_CCW);

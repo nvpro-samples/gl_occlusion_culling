@@ -73,7 +73,7 @@ namespace nvtoken
   // generic
 
   // not the cleanest way
-  #define NVTOKEN_TYPES (GL_FRONTFACE_COMMAND_NV+1)
+  #define NVTOKEN_TYPES (GL_FRONT_FACE_COMMAND_NV+1)
 
   enum NVTokenShaderStage {
     NVTOKEN_STAGE_VERTEX,
@@ -514,7 +514,7 @@ namespace nvtoken
   };
 
   struct NVTokenFrontFace {
-    static const GLenum   ID = GL_FRONTFACE_COMMAND_NV;
+    static const GLenum   ID = GL_FRONT_FACE_COMMAND_NV;
 
     FrontFaceCommandNV  cmd;
 

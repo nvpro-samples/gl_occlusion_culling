@@ -67,7 +67,7 @@
 #define GL_ALPHA_REF_COMMAND_NV                             0x000f
 #define GL_VIEWPORT_COMMAND_NV                              0x0010
 #define GL_SCISSOR_COMMAND_NV                               0x0011
-#define GL_FRONTFACE_COMMAND_NV                             0x0012
+#define GL_FRONT_FACE_COMMAND_NV                            0x0012
 
 
   typedef struct {
