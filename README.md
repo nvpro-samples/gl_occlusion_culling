@@ -1,5 +1,7 @@
 # gl occlusion culling
 
+![sample](https://github.com/nvpro-samples/gl_occlusion_culling/blob/master/doc/sample.png)
+
 This sample implements a batched occlusion culling system, which is not based on individual occlusion queries anymore, but uses shaders to cull many boxes at once. The principle algorithms are also illustrated towards the end of the presentation slides of [GTC 2014](http://on-demand.gputechconf.com/gtc/2014/presentations/S4379-opengl-44-scene-rendering-techniques.pdf) and [SIGGRAPH 2014](http://on-demand.gputechconf.com/siggraph/2014/presentation/SG4117-OpenGL-Scene-Rendering-Techniques.pdf)
 
 It leverages the **ARB_multi_draw_indirect** (MDI) extension to implement latency-free occlusion culling. The MDI technique works well with a simplified scene setup where all geometry is stored in one big VBO/IBO pairing and no shader changes are done in between.
