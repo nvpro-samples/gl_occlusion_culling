@@ -1,6 +1,6 @@
 # gl occlusion culling
 
-![sample](https://github.com/nvpro-samples/gl_occlusion_culling/blob/master/doc/sample.png)
+![sample](https://github.com/nvpro-samples/gl_occlusion_culling/blob/master/doc/sample.PNG)
 
 This sample implements a batched occlusion culling system, which is not based on individual occlusion queries anymore, but uses shaders to cull many boxes at once. The principle algorithms are also illustrated towards the end of the presentation slides of [GTC 2014](http://on-demand.gputechconf.com/gtc/2014/presentations/S4379-opengl-44-scene-rendering-techniques.pdf) and [SIGGRAPH 2014](http://on-demand.gputechconf.com/siggraph/2014/presentation/SG4117-OpenGL-Scene-Rendering-Techniques.pdf)
 
