@@ -59,6 +59,14 @@ This technique leverages the **ARB_multi_draw_indirect** and is free of synchron
 > Usage of GL_ATOMIC_COUNTER_BUFFER to append the final buffer, means we lose the ordering of the original scene.
 
 - **NVCmdList GPU:**
+
+![cmdlist1](https://github.com/nvpro-samples/gl_occlusion_culling/blob/master/doc/cmdlist1.png)
+
+![cmdlist](https://github.com/nvpro-samples/gl_occlusion_culling/blob/master/doc/cmdlist.png)
+
+
+(Slides taken from [GTC 2015 presentation](http://on-demand.gputechconf.com/gtc/2015/presentation/S5135-Christoph-Kubisch-Pierre-Boudier.pdf))
+
 This new extension allows a faster and more flexible implementation of the culling. The regular Indirect method may suffer from running over lots of empty drawindirects and as mentioned aboive GL_ARB_indirect_parameters may also have its issues. Here we can use **GL_TERMINATE_SEQUENCE_COMMAND_NV** to much more quickly opt out of the indirect sequence. We also have greater flexibility when it comes to drawing the scene, as we could store objects in different buffers, can use UBO toggles for each object and so on.
 The technique works similar to the indirect method, however because commands have variable size, generating out command buffer is a bit harder, the positive side effect is that we preserve the original ordering.
  - Where indirect could straight record the drawindirect commands depending on their visibility, we first create an output buffer that stores all the sizes of visible commands. We output the original size of a command if it was visible, or zero if not.
