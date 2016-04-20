@@ -51,10 +51,8 @@ if(WIN32 AND NOT GLUT_FOUND)
   add_definitions(/wd4996) #remove printf warning
   add_definitions(/wd4244) #remove double to float conversion warning
   add_definitions(/wd4305) #remove double to float truncation warning
-  add_executable(${PROJNAME} WIN32 ${SOURCE_FILES} ${COMMON_SOURCE_FILES} ${PACKAGE_SOURCE_FILES} ${GLSL_FILES})
-else()
-  add_executable(${PROJNAME} ${SOURCE_FILES} ${COMMON_SOURCE_FILES} ${PACKAGE_SOURCE_FILES} ${GLSL_FILES})
 endif()
+add_executable(${PROJNAME} ${SOURCE_FILES} ${COMMON_SOURCE_FILES} ${PACKAGE_SOURCE_FILES} ${GLSL_FILES})
 
 #####################################################################################
 # common source code needed for this sample
