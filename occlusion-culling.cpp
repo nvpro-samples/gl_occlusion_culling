@@ -1356,7 +1356,7 @@ namespace ocull
         sceneUbo.viewMatrix = view;
         sceneUbo.viewMatrixIT = nv_math::transpose(nv_math::invert(view));
 
-        sceneUbo.viewPos = -view.col(3);
+        sceneUbo.viewPos = sceneUbo.viewMatrixIT.row(3);
         sceneUbo.viewDir = -view.row(2);
 
         glBindBuffer(GL_UNIFORM_BUFFER, buffers.scene_ubo);
