@@ -21,13 +21,9 @@
 #define PERSPECTIVE     1
 #endif
 
-#if PERSPECTIVE
-  // not so trivial to find the 3 visible sides, let hw do the culling
-  layout(points,invocations=6) in;  
-#else
-  // render the 3 visible sides based on view direction and box normal
-  layout(points,invocations=3) in;  
-#endif
+// render the 3 visible sides based on view direction and box normal
+layout(points,invocations=3) in;  
+
 // one side each invocation
 layout(triangle_strip,max_vertices=4) out;
 
@@ -40,6 +36,7 @@ in VertexOut{
 
 flat out int objid;
 
+uniform vec3 viewPos;
 uniform vec3 viewDir;
 uniform mat4 viewProjTM;
 uniform samplerBuffer matricesTex;
@@ -58,11 +55,7 @@ void main()
   vec3 edgeBasis0 = vec3(0);
   vec3 edgeBasis1 = vec3(0);
   
-#if PERSPECTIVE
-  int id = gl_InvocationID % 3;
-#else
   int id = gl_InvocationID;
-#endif
 
   if (id == 0)
   {
@@ -83,8 +76,12 @@ void main()
       edgeBasis1.y = IN[0].bboxDim.y;
   }
   
+  vec3 worldCtr = (worldTM * vec4(IN[0].bboxCtr, 1)).xyz;
+  
 #if PERSPECTIVE
-  float proj = gl_InvocationID < 3 ? 1 : -1;
+  vec3 worldNormal = mat3(worldTM) * faceNormal;
+  vec3 worldPos    = worldCtr + worldNormal;
+  float proj = sign(dot(worldPos - viewPos.xyz, worldNormal));
 #else
   vec3 worldNormal = mat3(worldTM) * faceNormal;
   float proj = sign(dot(viewDir,worldNormal));
@@ -100,8 +97,6 @@ void main()
   edgeBasis1 = mat3(worldTM) * (edgeBasis1) * proj;
   
   objid = IN[0].objid;
-  
-  vec3 worldCtr = (worldTM * vec4(IN[0].bboxCtr,1)).xyz;
   
 #if FLIPWIND
   gl_Position = viewProjTM * vec4(worldCtr + (faceNormal - edgeBasis0 - edgeBasis1),1);
