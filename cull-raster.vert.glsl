@@ -62,6 +62,8 @@ void main()
       texelFetch(matricesTex,matindex + 2),
       texelFetch(matricesTex,matindex + 3));
       
+    // TODO: adjust dimension by adding abs(vec3(nearPlane) * mat3(worldInvTransTM))
+    //       to account for nearplane intersecting the bbox
     vec3 objPos = (vec4(viewPos,1) * worldInvTransTM).xyz;
     objPos -= ctr;
     if (all(lessThan(abs(objPos),dim))){
@@ -72,7 +74,7 @@ void main()
 }
 
 /*-----------------------------------------------------------------------
-  Copyright (c) 2014, NVIDIA. All rights reserved.
+  Copyright (c) 2014-2017, NVIDIA. All rights reserved.
 
   Redistribution and use in source and binary forms, with or without
   modification, are permitted provided that the following conditions
