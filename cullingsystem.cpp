@@ -1,27 +1,30 @@
-/*-----------------------------------------------------------------------
-  Copyright (c) 2014, NVIDIA. All rights reserved.
+/* Copyright (c) 2014-2018, NVIDIA CORPORATION. All rights reserved.
+ *
+ * Redistribution and use in source and binary forms, with or without
+ * modification, are permitted provided that the following conditions
+ * are met:
+ *  * Redistributions of source code must retain the above copyright
+ *    notice, this list of conditions and the following disclaimer.
+ *  * Redistributions in binary form must reproduce the above copyright
+ *    notice, this list of conditions and the following disclaimer in the
+ *    documentation and/or other materials provided with the distribution.
+ *  * Neither the name of NVIDIA CORPORATION nor the names of its
+ *    contributors may be used to endorse or promote products derived
+ *    from this software without specific prior written permission.
+ *
+ * THIS SOFTWARE IS PROVIDED BY THE COPYRIGHT HOLDERS ``AS IS'' AND ANY
+ * EXPRESS OR IMPLIED WARRANTIES, INCLUDING, BUT NOT LIMITED TO, THE
+ * IMPLIED WARRANTIES OF MERCHANTABILITY AND FITNESS FOR A PARTICULAR
+ * PURPOSE ARE DISCLAIMED.  IN NO EVENT SHALL THE COPYRIGHT OWNER OR
+ * CONTRIBUTORS BE LIABLE FOR ANY DIRECT, INDIRECT, INCIDENTAL, SPECIAL,
+ * EXEMPLARY, OR CONSEQUENTIAL DAMAGES (INCLUDING, BUT NOT LIMITED TO,
+ * PROCUREMENT OF SUBSTITUTE GOODS OR SERVICES; LOSS OF USE, DATA, OR
+ * PROFITS; OR BUSINESS INTERRUPTION) HOWEVER CAUSED AND ON ANY THEORY
+ * OF LIABILITY, WHETHER IN CONTRACT, STRICT LIABILITY, OR TORT
+ * (INCLUDING NEGLIGENCE OR OTHERWISE) ARISING IN ANY WAY OUT OF THE USE
+ * OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
+ */
 
-  Redistribution and use in source and binary forms, with or without
-  modification, are permitted provided that the following conditions
-  are met:
-   * Redistributions of source code must retain the above copyright
-     notice, this list of conditions and the following disclaimer.
-   * Neither the name of its contributors may be used to endorse 
-     or promote products derived from this software without specific
-     prior written permission.
-
-  THIS SOFTWARE IS PROVIDED BY THE COPYRIGHT HOLDERS ``AS IS'' AND ANY
-  EXPRESS OR IMPLIED WARRANTIES, INCLUDING, BUT NOT LIMITED TO, THE
-  IMPLIED WARRANTIES OF MERCHANTABILITY AND FITNESS FOR A PARTICULAR
-  PURPOSE ARE DISCLAIMED.  IN NO EVENT SHALL THE COPYRIGHT OWNER OR
-  CONTRIBUTORS BE LIABLE FOR ANY DIRECT, INDIRECT, INCIDENTAL, SPECIAL,
-  EXEMPLARY, OR CONSEQUENTIAL DAMAGES (INCLUDING, BUT NOT LIMITED TO,
-  PROCUREMENT OF SUBSTITUTE GOODS OR SERVICES; LOSS OF USE, DATA, OR
-  PROFITS; OR BUSINESS INTERRUPTION) HOWEVER CAUSED AND ON ANY THEORY
-  OF LIABILITY, WHETHER IN CONTRACT, STRICT LIABILITY, OR TORT
-  (INCLUDING NEGLIGENCE OR OTHERWISE) ARISING IN ANY WAY OUT OF THE USE
-  OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
------------------------------------------------------------------------*/
 /* Contact ckubisch@nvidia.com (Christoph Kubisch) for feedback */
 
 #include "cullingsystem.hpp"
@@ -38,14 +41,14 @@ void CullingSystem::init( const Programs &programs, bool dualindex )
 {
   update(programs,dualindex);
   glGenFramebuffers(1,&m_fbo);
-  glGenTextures(2,m_tbo);
+  glCreateTextures(GL_TEXTURE_BUFFER,2,m_tbo);
 }
 
 void CullingSystem::update( const Programs &programs, bool dualindex )
 {
   m_programs = programs;
   m_dualindex = dualindex;
-  m_usessbo = !!GLEW_ARB_shader_storage_buffer_object;
+  m_usessbo = has_GL_VERSION_4_2 != 0;
   if (!m_usessbo)
   {
     const char* xfbstreams[] = {"outstream"};
@@ -114,7 +117,7 @@ void CullingSystem::buildDepthMipmaps( GLuint textureDepth, int width, int heigh
   glBindFramebuffer(GL_FRAMEBUFFER,m_fbo);
   glDepthFunc(GL_ALWAYS);
   glUseProgram(m_programs.depth_mips);
-  glActiveTexture(GL_TEXTURE0_ARB);
+  glActiveTexture(GL_TEXTURE0);
   glBindTexture(GL_TEXTURE_2D, textureDepth);
 
 
@@ -174,12 +177,12 @@ void CullingSystem::testBboxes( Job &job, bool raster )
   glEnableVertexAttribArray(2);
   glBindBuffer(GL_ARRAY_BUFFER, 0);
   
-  glActiveTexture(GL_TEXTURE0_ARB);
+  glActiveTexture(GL_TEXTURE0);
   glBindTexture(GL_TEXTURE_BUFFER, m_tbo[0]);
   job.m_bufferMatrices.TexBuffer(GL_TEXTURE_BUFFER,GL_RGBA32F);
 
   if (m_dualindex){
-    glActiveTexture(GL_TEXTURE1_ARB);
+    glActiveTexture(GL_TEXTURE1);
     glBindTexture(GL_TEXTURE_BUFFER, m_tbo[1]);
     job.m_bufferBboxes.TexBuffer(GL_TEXTURE_BUFFER,GL_RGBA32F);
   }
@@ -221,7 +224,7 @@ void CullingSystem::testBboxes( Job &job, bool raster )
 
   if (m_dualindex){
     glBindTexture(GL_TEXTURE_BUFFER, 0);
-    glActiveTexture(GL_TEXTURE0_ARB);
+    glActiveTexture(GL_TEXTURE0);
   }
   glBindTexture(GL_TEXTURE_BUFFER, 0);
   
@@ -308,14 +311,14 @@ void CullingSystem::buildOutput( MethodType method, Job &job, const View& view )
     {
       glUseProgram(m_programs.object_hiz);
       glUniformMatrix4fv(m_uniforms.hiz_viewProj, 1, GL_FALSE, view.viewProjMatrix);
-      glActiveTexture(GL_TEXTURE2_ARB);
+      glActiveTexture(GL_TEXTURE2);
       glBindTexture(GL_TEXTURE_2D,job.m_textureDepthWithMipmaps);
       
       testBboxes(job,false);
       
-      glActiveTexture(GL_TEXTURE2_ARB);
+      glActiveTexture(GL_TEXTURE2);
       glBindTexture(GL_TEXTURE_2D,0);
-      glActiveTexture(GL_TEXTURE0_ARB);
+      glActiveTexture(GL_TEXTURE0);
     }
     break;
   case METHOD_RASTER:

@@ -1,27 +1,30 @@
-/*-----------------------------------------------------------------------
-  Copyright (c) 2014, NVIDIA. All rights reserved.
+/* Copyright (c) 2014-2018, NVIDIA CORPORATION. All rights reserved.
+ *
+ * Redistribution and use in source and binary forms, with or without
+ * modification, are permitted provided that the following conditions
+ * are met:
+ *  * Redistributions of source code must retain the above copyright
+ *    notice, this list of conditions and the following disclaimer.
+ *  * Redistributions in binary form must reproduce the above copyright
+ *    notice, this list of conditions and the following disclaimer in the
+ *    documentation and/or other materials provided with the distribution.
+ *  * Neither the name of NVIDIA CORPORATION nor the names of its
+ *    contributors may be used to endorse or promote products derived
+ *    from this software without specific prior written permission.
+ *
+ * THIS SOFTWARE IS PROVIDED BY THE COPYRIGHT HOLDERS ``AS IS'' AND ANY
+ * EXPRESS OR IMPLIED WARRANTIES, INCLUDING, BUT NOT LIMITED TO, THE
+ * IMPLIED WARRANTIES OF MERCHANTABILITY AND FITNESS FOR A PARTICULAR
+ * PURPOSE ARE DISCLAIMED.  IN NO EVENT SHALL THE COPYRIGHT OWNER OR
+ * CONTRIBUTORS BE LIABLE FOR ANY DIRECT, INDIRECT, INCIDENTAL, SPECIAL,
+ * EXEMPLARY, OR CONSEQUENTIAL DAMAGES (INCLUDING, BUT NOT LIMITED TO,
+ * PROCUREMENT OF SUBSTITUTE GOODS OR SERVICES; LOSS OF USE, DATA, OR
+ * PROFITS; OR BUSINESS INTERRUPTION) HOWEVER CAUSED AND ON ANY THEORY
+ * OF LIABILITY, WHETHER IN CONTRACT, STRICT LIABILITY, OR TORT
+ * (INCLUDING NEGLIGENCE OR OTHERWISE) ARISING IN ANY WAY OUT OF THE USE
+ * OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
+ */
 
-  Redistribution and use in source and binary forms, with or without
-  modification, are permitted provided that the following conditions
-  are met:
-   * Redistributions of source code must retain the above copyright
-     notice, this list of conditions and the following disclaimer.
-   * Neither the name of its contributors may be used to endorse 
-     or promote products derived from this software without specific
-     prior written permission.
-
-  THIS SOFTWARE IS PROVIDED BY THE COPYRIGHT HOLDERS ``AS IS'' AND ANY
-  EXPRESS OR IMPLIED WARRANTIES, INCLUDING, BUT NOT LIMITED TO, THE
-  IMPLIED WARRANTIES OF MERCHANTABILITY AND FITNESS FOR A PARTICULAR
-  PURPOSE ARE DISCLAIMED.  IN NO EVENT SHALL THE COPYRIGHT OWNER OR
-  CONTRIBUTORS BE LIABLE FOR ANY DIRECT, INDIRECT, INCIDENTAL, SPECIAL,
-  EXEMPLARY, OR CONSEQUENTIAL DAMAGES (INCLUDING, BUT NOT LIMITED TO,
-  PROCUREMENT OF SUBSTITUTE GOODS OR SERVICES; LOSS OF USE, DATA, OR
-  PROFITS; OR BUSINESS INTERRUPTION) HOWEVER CAUSED AND ON ANY THEORY
-  OF LIABILITY, WHETHER IN CONTRACT, STRICT LIABILITY, OR TORT
-  (INCLUDING NEGLIGENCE OR OTHERWISE) ARISING IN ANY WAY OUT OF THE USE
-  OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
------------------------------------------------------------------------*/
 /* Contact ckubisch@nvidia.com (Christoph Kubisch) for feedback */
 
 
@@ -30,9 +33,8 @@
 #include <vector>
 
 #define NVTOKEN_STATESYSTEM 0
-
+#include <include_gl.h>
 #include "platform.h"
-#include "nvcommandlist.h"
 #if NVTOKEN_STATESYSTEM
 // not needed if emulation is not used, or implemented differently
 #include "statesystem.hpp"
@@ -94,7 +96,7 @@ namespace nvtoken
     size_t          m_max;
     unsigned char*  m_begin;
     unsigned char*  m_end;
-    unsigned char* NVP_RESTRICT m_cur;
+    unsigned char* NV_RESTRICT m_cur;
 
     void init(void* data, size_t size)
     {
@@ -253,9 +255,9 @@ namespace nvtoken
     }
     
     void setMode(GLenum primmode) {
-      assert(primmode != GL_TRIANGLE_FAN && primmode != GL_POLYGON && primmode != GL_LINE_LOOP);
+      assert(primmode != GL_TRIANGLE_FAN && /* primmode != GL_POLYGON  && */ primmode != GL_LINE_LOOP);
       
-      if (primmode == GL_LINE_STRIP || primmode == GL_TRIANGLE_STRIP || primmode == GL_QUAD_STRIP ||
+      if (primmode == GL_LINE_STRIP || primmode == GL_TRIANGLE_STRIP || /* primmode == GL_QUAD_STRIP ||*/
           primmode == GL_LINE_STRIP_ADJACENCY || primmode == GL_TRIANGLE_STRIP_ADJACENCY)
       {
         cmd.header = s_nvcmdlist_header[GL_DRAW_ELEMENTS_STRIP_COMMAND_NV];
@@ -286,9 +288,9 @@ namespace nvtoken
     }
     
     void setMode(GLenum primmode) {
-      assert(primmode != GL_TRIANGLE_FAN && primmode != GL_POLYGON && primmode != GL_LINE_LOOP);
+      assert(primmode != GL_TRIANGLE_FAN && /* primmode != GL_POLYGON  && */ primmode != GL_LINE_LOOP);
       
-      if (primmode == GL_LINE_STRIP || primmode == GL_TRIANGLE_STRIP || primmode == GL_QUAD_STRIP ||
+      if (primmode == GL_LINE_STRIP || primmode == GL_TRIANGLE_STRIP || /* primmode == GL_QUAD_STRIP || */
           primmode == GL_LINE_STRIP_ADJACENCY || primmode == GL_TRIANGLE_STRIP_ADJACENCY)
       {
         cmd.header = s_nvcmdlist_header[GL_DRAW_ARRAYS_STRIP_COMMAND_NV];
@@ -564,17 +566,17 @@ namespace nvtoken
   
   void        nvtokenInitInternals( bool hwsupport, bool bindlessSupport);
   const char* nvtokenCommandToString( GLenum type );
-  void        nvtokenGetStats( const void* NVP_RESTRICT stream, size_t streamSize, int stats[NVTOKEN_TYPES]);
+  void        nvtokenGetStats( const void* NV_RESTRICT stream, size_t streamSize, int stats[NVTOKEN_TYPES]);
 
-  void nvtokenDrawCommandsSW(GLenum mode, const void* NVP_RESTRICT stream, size_t streamSize, 
-    const GLintptr* NVP_RESTRICT offsets, const GLsizei* NVP_RESTRICT sizes, 
+  void nvtokenDrawCommandsSW(GLenum mode, const void* NV_RESTRICT stream, size_t streamSize, 
+    const GLintptr* NV_RESTRICT offsets, const GLsizei* NV_RESTRICT sizes, 
     GLuint count, 
     StateSystem::State &state);
 
 #if NVTOKEN_STATESYSTEM
-  void nvtokenDrawCommandsStatesSW(const void* NVP_RESTRICT stream, size_t streamSize, 
-    const GLintptr* NVP_RESTRICT offsets, const GLsizei* NVP_RESTRICT sizes, 
-    const GLuint* NVP_RESTRICT states, const GLuint* NVP_RESTRICT fbos, GLuint count, 
+  void nvtokenDrawCommandsStatesSW(const void* NV_RESTRICT stream, size_t streamSize, 
+    const GLintptr* NV_RESTRICT offsets, const GLsizei* NV_RESTRICT sizes, 
+    const GLuint* NV_RESTRICT states, const GLuint* NV_RESTRICT fbos, GLuint count, 
     StateSystem &stateSystem);
 #endif
 }

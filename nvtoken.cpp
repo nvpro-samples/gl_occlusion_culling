@@ -1,27 +1,30 @@
-/*-----------------------------------------------------------------------
-  Copyright (c) 2014, NVIDIA. All rights reserved.
+/* Copyright (c) 2014-2018, NVIDIA CORPORATION. All rights reserved.
+ *
+ * Redistribution and use in source and binary forms, with or without
+ * modification, are permitted provided that the following conditions
+ * are met:
+ *  * Redistributions of source code must retain the above copyright
+ *    notice, this list of conditions and the following disclaimer.
+ *  * Redistributions in binary form must reproduce the above copyright
+ *    notice, this list of conditions and the following disclaimer in the
+ *    documentation and/or other materials provided with the distribution.
+ *  * Neither the name of NVIDIA CORPORATION nor the names of its
+ *    contributors may be used to endorse or promote products derived
+ *    from this software without specific prior written permission.
+ *
+ * THIS SOFTWARE IS PROVIDED BY THE COPYRIGHT HOLDERS ``AS IS'' AND ANY
+ * EXPRESS OR IMPLIED WARRANTIES, INCLUDING, BUT NOT LIMITED TO, THE
+ * IMPLIED WARRANTIES OF MERCHANTABILITY AND FITNESS FOR A PARTICULAR
+ * PURPOSE ARE DISCLAIMED.  IN NO EVENT SHALL THE COPYRIGHT OWNER OR
+ * CONTRIBUTORS BE LIABLE FOR ANY DIRECT, INDIRECT, INCIDENTAL, SPECIAL,
+ * EXEMPLARY, OR CONSEQUENTIAL DAMAGES (INCLUDING, BUT NOT LIMITED TO,
+ * PROCUREMENT OF SUBSTITUTE GOODS OR SERVICES; LOSS OF USE, DATA, OR
+ * PROFITS; OR BUSINESS INTERRUPTION) HOWEVER CAUSED AND ON ANY THEORY
+ * OF LIABILITY, WHETHER IN CONTRACT, STRICT LIABILITY, OR TORT
+ * (INCLUDING NEGLIGENCE OR OTHERWISE) ARISING IN ANY WAY OUT OF THE USE
+ * OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
+ */
 
-  Redistribution and use in source and binary forms, with or without
-  modification, are permitted provided that the following conditions
-  are met:
-   * Redistributions of source code must retain the above copyright
-     notice, this list of conditions and the following disclaimer.
-   * Neither the name of its contributors may be used to endorse 
-     or promote products derived from this software without specific
-     prior written permission.
-
-  THIS SOFTWARE IS PROVIDED BY THE COPYRIGHT HOLDERS ``AS IS'' AND ANY
-  EXPRESS OR IMPLIED WARRANTIES, INCLUDING, BUT NOT LIMITED TO, THE
-  IMPLIED WARRANTIES OF MERCHANTABILITY AND FITNESS FOR A PARTICULAR
-  PURPOSE ARE DISCLAIMED.  IN NO EVENT SHALL THE COPYRIGHT OWNER OR
-  CONTRIBUTORS BE LIABLE FOR ANY DIRECT, INDIRECT, INCIDENTAL, SPECIAL,
-  EXEMPLARY, OR CONSEQUENTIAL DAMAGES (INCLUDING, BUT NOT LIMITED TO,
-  PROCUREMENT OF SUBSTITUTE GOODS OR SERVICES; LOSS OF USE, DATA, OR
-  PROFITS; OR BUSINESS INTERRUPTION) HOWEVER CAUSED AND ON ANY THEORY
-  OF LIABILITY, WHETHER IN CONTRACT, STRICT LIABILITY, OR TORT
-  (INCLUDING NEGLIGENCE OR OTHERWISE) ARISING IN ANY WAY OUT OF THE USE
-  OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
------------------------------------------------------------------------*/
 /* Contact ckubisch@nvidia.com (Christoph Kubisch) for feedback */
 
 #include "nvtoken.hpp"
@@ -146,9 +149,9 @@ namespace nvtoken
   //////////////////////////////////////////////////////////////////////////
 
 
-  void nvtokenGetStats( const void* NVP_RESTRICT stream, size_t streamSize, int stats[NVTOKEN_TYPES] )
+  void nvtokenGetStats( const void* NV_RESTRICT stream, size_t streamSize, int stats[NVTOKEN_TYPES] )
   {
-    const GLubyte* NVP_RESTRICT current = (GLubyte*)stream;
+    const GLubyte* NV_RESTRICT current = (GLubyte*)stream;
     const GLubyte* streamEnd = current + streamSize;
 
     while (current < streamEnd){
@@ -164,15 +167,15 @@ namespace nvtoken
 
   // Emulation related
 
-  static __forceinline GLenum nvtokenDrawCommandSequenceSW( const void* NVP_RESTRICT stream, size_t streamSize, GLenum mode, GLenum type, const StateSystem::State& state ) 
+  static __forceinline GLenum nvtokenDrawCommandSequenceSW( const void* NV_RESTRICT stream, size_t streamSize, GLenum mode, GLenum type, const StateSystem::State& state ) 
   {
-    const GLubyte* NVP_RESTRICT current = (GLubyte*)stream;
+    const GLubyte* NV_RESTRICT current = (GLubyte*)stream;
     const GLubyte* streamEnd = current + streamSize;
 
     GLenum modeStrip;
     if      (mode == GL_LINES)                modeStrip = GL_LINE_STRIP;
     else if (mode == GL_TRIANGLES)            modeStrip = GL_TRIANGLE_STRIP;
-    else if (mode == GL_QUADS)                modeStrip = GL_QUAD_STRIP;
+    /* else if (mode == GL_QUADS)                modeStrip = GL_QUAD_STRIP; */
     else if (mode == GL_LINES_ADJACENCY)      modeStrip = GL_LINE_STRIP_ADJACENCY;
     else if (mode == GL_TRIANGLES_ADJACENCY)  modeStrip = GL_TRIANGLE_STRIP_ADJACENCY;
     else    modeStrip = mode;
@@ -306,7 +309,7 @@ namespace nvtoken
       case GL_ALPHA_REF_COMMAND_NV:
         {
           const AlphaRefCommandNV* cmd = (const AlphaRefCommandNV*)current;
-          glAlphaFunc(state.alpha.mode, cmd->alphaRef);
+          /* glAlphaFunc(state.alpha.mode, cmd->alphaRef); */
         }
         break;
       case GL_VIEWPORT_COMMAND_NV:
@@ -339,12 +342,12 @@ namespace nvtoken
     return type;
   }
 
-  void nvtokenDrawCommandsSW(GLenum mode, const void* NVP_RESTRICT stream, size_t streamSize, 
-    const GLintptr* NVP_RESTRICT offsets, const GLsizei* NVP_RESTRICT sizes, 
+  void nvtokenDrawCommandsSW(GLenum mode, const void* NV_RESTRICT stream, size_t streamSize, 
+    const GLintptr* NV_RESTRICT offsets, const GLsizei* NV_RESTRICT sizes, 
     GLuint count, 
     StateSystem::State &state)
   {
-    const char* NVP_RESTRICT tokens = (const char*)stream;
+    const char* NV_RESTRICT tokens = (const char*)stream;
     GLenum type = GL_UNSIGNED_SHORT;
     for (GLuint i = 0; i < count; i++)
     {
@@ -359,13 +362,13 @@ namespace nvtoken
   }
 
 #if NVTOKEN_STATESYSTEM
-  void nvtokenDrawCommandsStatesSW(const void* NVP_RESTRICT stream, size_t streamSize, 
-    const GLintptr* NVP_RESTRICT offsets, const GLsizei* NVP_RESTRICT sizes, 
-    const GLuint* NVP_RESTRICT states, const GLuint* NVP_RESTRICT fbos, GLuint count, 
+  void nvtokenDrawCommandsStatesSW(const void* NV_RESTRICT stream, size_t streamSize, 
+    const GLintptr* NV_RESTRICT offsets, const GLsizei* NV_RESTRICT sizes, 
+    const GLuint* NV_RESTRICT states, const GLuint* NV_RESTRICT fbos, GLuint count, 
     StateSystem &stateSystem)
   {
     int lastFbo = ~0;
-    const char* NVP_RESTRICT tokens = (const char*)stream;
+    const char* NV_RESTRICT tokens = (const char*)stream;
 
     StateSystem::StateID lastID;
 

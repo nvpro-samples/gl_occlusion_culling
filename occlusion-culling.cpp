@@ -27,18 +27,23 @@
 
 #define DEBUG_FILTER     1
 
-#include <GL/glew.h>
-#include <nv_helpers/anttweakbar.hpp>
-#include <nv_helpers_gl/WindowProfiler.hpp>
+#include <nv_helpers_gl/extensions_gl.hpp>
+
+#include <imgui/imgui_helper.h>
+#include <imgui/imgui_impl_gl.h>
+
 #include <nv_math/nv_math_glsltypes.h>
 
-#include <nv_helpers_gl/error.hpp>
-#include <nv_helpers_gl/programmanager.hpp>
 #include <nv_helpers/geometry.hpp>
 #include <nv_helpers/misc.hpp>
-#include <nv_helpers_gl/glresources.hpp>
 #include <nv_helpers/cameracontrol.hpp>
 
+#include <nv_helpers_gl/appwindowprofiler_gl.hpp>
+#include <nv_helpers_gl/error_gl.hpp>
+#include <nv_helpers_gl/programmanager_gl.hpp>
+#include <nv_helpers_gl/base_gl.hpp>
+
+#include <nv_helpers/tnulled.hpp>
 
 #include <vector>
 
@@ -61,7 +66,7 @@ namespace ocull
   int const SAMPLE_SIZE_WIDTH(800);
   int const SAMPLE_SIZE_HEIGHT(600);
   int const SAMPLE_MAJOR_VERSION(4);
-  int const SAMPLE_MINOR_VERSION(3);
+  int const SAMPLE_MINOR_VERSION(5);
 
   static const GLenum    fboFormat = GL_RGBA16F;
   static const int        grid = 26;
@@ -69,9 +74,13 @@ namespace ocull
 
   static ScanSystem       s_scanSys;
 
-  class Sample : public nv_helpers_gl::WindowProfiler
+  class Sample : public nv_helpers_gl::AppWindowProfilerGL
   {
-    ProgramManager progManager;
+    enum GuiEnums {
+      GUI_ALGORITHM,
+      GUI_RESULT,
+      GUI_DRAW,
+    };
 
     enum DrawModes {
       DRAW_STANDARD,
@@ -108,11 +117,12 @@ namespace ocull
     } programs;
 
     struct {
-      ResourceGLuint  scene;
+      nv_helpers::TNulled<GLuint>
+        scene;
     } fbos;
 
     struct {
-      ResourceGLuint  
+      nv_helpers::TNulled<GLuint>
         scene_ubo,
         scene_vbo,
         scene_ibo,
@@ -151,7 +161,7 @@ namespace ocull
     } addresses;
 
     struct {
-      ResourceGLuint
+      nv_helpers::TNulled<GLuint>
         scene_color,
         scene_depthstencil,
         scene_matrices;
@@ -222,49 +232,48 @@ namespace ocull
     };
 
     struct Tweak {
-      Tweak() 
-        : culling(false)
-        , animate(0)
-        , freeze(false)
-        , method(CullingSystem::METHOD_RASTER)
-        , result(RESULT_REGULAR_CURRENT)
-        , drawmode(DRAW_STANDARD)
-      {}
-
-      CullingSystem::MethodType method;
-      ResultType                result;
-      DrawModes                 drawmode;
-      bool      culling;
-      bool      freeze;
-      float     animate;
+      CullingSystem::MethodType method = CullingSystem::METHOD_RASTER;
+      ResultType                result = RESULT_REGULAR_CURRENT;
+      DrawModes                 drawmode = DRAW_STANDARD;
+      bool      culling = false;
+      bool      freeze = false;
+      float     animate = 0;
 
     };
 
-    Tweak      tweak;
-    Tweak      tweakLast;
+    ProgramManager  m_progManager;
+    CameraControl   m_control;
 
+    Tweak           m_tweak;
+    Tweak           m_tweakLast;
 
-    std::vector<int>            sceneVisBits;
-    std::vector<DrawCmd>        sceneCmds;
-    std::vector<nv_math::mat4f> sceneMatrices;
-    std::vector<nv_math::mat4f> sceneMatricesAnimated;
+    ImGuiH::Registry            m_ui;
+    double                      m_uiTime;
 
-    GLuint                      numTokens;
-    std::string                 tokenStream;
-    std::string                 tokenStreamCulled;
+    SceneData                   m_sceneUbo;
 
-    SceneData   sceneUbo;
-    double      statsTime;
-    bool        statsPrint;
-    bool        cmdlistNative;
-    bool        bindlessVboUbo;
+    std::vector<int>            m_sceneVisBits;
+    std::vector<DrawCmd>        m_sceneCmds;
+    std::vector<nv_math::mat4f> m_sceneMatrices;
+    std::vector<nv_math::mat4f> m_sceneMatricesAnimated;
 
-    CullingSystem                cullSys;
-    CullingSystem::JobReadback   cullJobReadback;
-    CullingSystem::JobIndirectUnordered   cullJobIndirect;
-    CullJobToken                          cullJobToken;
+    GLuint                      m_numTokens;
+    std::string                 m_tokenStream;
+    std::string                 m_tokenStreamCulled;
+
+    
+    double      m_statsTime;
+    bool        m_statsPrint;
+    bool        m_cmdlistNative;
+    bool        m_bindlessVboUbo;
+
+    CullingSystem                m_cullSys;
+    CullingSystem::JobReadback   m_cullJobReadback;
+    CullingSystem::JobIndirectUnordered   m_cullJobIndirect;
+    CullJobToken                          M_cullJobToken;
 
     bool begin();
+    void processUI(double time);
     void think(double time);
     void resize(int width, int height);
 
@@ -284,23 +293,24 @@ namespace ocull
     void systemChange();
 
 
-    CameraControl m_control;
-
     void end() {
-      TwTerminate();
+      ImGui::ShutdownGL();
     }
     // return true to prevent m_window updates
-    bool mouse_pos    (int x, int y) {
-      return !!TwEventMousePosGLFW(x,y); 
+    bool mouse_pos(int x, int y) {
+      return ImGuiH::mouse_pos(x, y);
     }
-    bool mouse_button (int button, int action) {
-      return !!TwEventMouseButtonGLFW(button, action);
+    bool mouse_button(int button, int action) {
+      return ImGuiH::mouse_button(button, action);
     }
-    bool mouse_wheel  (int wheel) {
-      return !!TwEventMouseWheelGLFW(wheel); 
+    bool mouse_wheel(int wheel) {
+      return ImGuiH::mouse_wheel(wheel);
     }
-    bool key_button   (int button, int action, int mods) {
-      return handleTwKeyPressed(button,action,mods);
+    bool key_char(int button) {
+      return ImGuiH::key_char(button);
+    }
+    bool key_button(int button, int action, int mods) {
+      return ImGuiH::key_button(button, action, mods);
     }
 
   };
@@ -308,75 +318,76 @@ namespace ocull
   bool Sample::initProgram()
   {
     bool validated(true);
-    progManager.addDirectory( std::string(PROJECT_NAME));
-    progManager.addDirectory( sysExePath() + std::string(PROJECT_RELDIRECTORY));
-    progManager.addDirectory( std::string(PROJECT_ABSDIRECTORY));
+    m_progManager.m_filetype = ShaderFileManager::FILETYPE_GLSL;
+    m_progManager.addDirectory( std::string("GLSL_" PROJECT_NAME));
+    m_progManager.addDirectory( sysExePath() + std::string(PROJECT_RELDIRECTORY));
+    m_progManager.addDirectory( std::string(PROJECT_ABSDIRECTORY));
 
-    progManager.registerInclude("common.h", "common.h");
-    progManager.registerInclude("noise.glsl", "noise.glsl");
+    m_progManager.registerInclude("common.h", "common.h");
+    m_progManager.registerInclude("noise.glsl", "noise.glsl");
 
-    programs.draw_scene = progManager.createProgram(
+    programs.draw_scene = m_progManager.createProgram(
       ProgramManager::Definition(GL_VERTEX_SHADER,   "scene.vert.glsl"),
       ProgramManager::Definition(GL_FRAGMENT_SHADER, "scene.frag.glsl"));
 
-    programs.object_raster = progManager.createProgram(
+    programs.object_raster = m_progManager.createProgram(
       ProgramManager::Definition(GL_VERTEX_SHADER,   "cull-raster.vert.glsl"),
       ProgramManager::Definition(GL_GEOMETRY_SHADER, "cull-raster.geo.glsl"),
       ProgramManager::Definition(GL_FRAGMENT_SHADER, "cull-raster.frag.glsl"));
 
-    programs.object_frustum = progManager.createProgram(
+    programs.object_frustum = m_progManager.createProgram(
       ProgramManager::Definition(GL_VERTEX_SHADER,  "cull-xfb.vert.glsl"));
 
-    programs.object_hiz = progManager.createProgram(
+    programs.object_hiz = m_progManager.createProgram(
       ProgramManager::Definition(GL_VERTEX_SHADER,  "#define OCCLUSION\n", "cull-xfb.vert.glsl"));
 
-    programs.bit_regular = progManager.createProgram(
+    programs.bit_regular = m_progManager.createProgram(
       ProgramManager::Definition(GL_VERTEX_SHADER,  "#define TEMPORAL 0\n", "cull-bitpack.vert.glsl"));
-    programs.bit_temporallast = progManager.createProgram(
+    programs.bit_temporallast = m_progManager.createProgram(
       ProgramManager::Definition(GL_VERTEX_SHADER,  "#define TEMPORAL TEMPORAL_LAST\n", "cull-bitpack.vert.glsl"));
-    programs.bit_temporalnew = progManager.createProgram(
+    programs.bit_temporalnew = m_progManager.createProgram(
       ProgramManager::Definition(GL_VERTEX_SHADER,  "#define TEMPORAL TEMPORAL_NEW\n", "cull-bitpack.vert.glsl"));
 
-    programs.indirect_unordered = progManager.createProgram(
+    programs.indirect_unordered = m_progManager.createProgram(
       ProgramManager::Definition(GL_VERTEX_SHADER, "cull-indirectunordered.vert.glsl"));
 
-    programs.depth_mips = progManager.createProgram(
+    programs.depth_mips = m_progManager.createProgram(
       ProgramManager::Definition(GL_VERTEX_SHADER,   "cull-downsample.vert.glsl"),
       ProgramManager::Definition(GL_FRAGMENT_SHADER, "cull-downsample.frag.glsl"));
 
-    programs.token_sizes = progManager.createProgram(
+    programs.token_sizes = m_progManager.createProgram(
       nv_helpers_gl::ProgramManager::Definition(GL_VERTEX_SHADER, "cull-tokensizes.vert.glsl"));
-    programs.token_cmds = progManager.createProgram(
+    programs.token_cmds = m_progManager.createProgram(
       nv_helpers_gl::ProgramManager::Definition(GL_VERTEX_SHADER, "cull-tokencmds.vert.glsl"));
 
-    programs.scan_prefixsum = progManager.createProgram(
+    programs.scan_prefixsum = m_progManager.createProgram(
       nv_helpers_gl::ProgramManager::Definition(GL_COMPUTE_SHADER,  "#define TASK TASK_SUM\n", "scan.comp.glsl"));
-    programs.scan_offsets = progManager.createProgram(
+    programs.scan_offsets = m_progManager.createProgram(
       nv_helpers_gl::ProgramManager::Definition(GL_COMPUTE_SHADER,  "#define TASK TASK_OFFSETS\n", "scan.comp.glsl"));
-    programs.scan_combine = progManager.createProgram(
+    programs.scan_combine = m_progManager.createProgram(
       nv_helpers_gl::ProgramManager::Definition(GL_COMPUTE_SHADER,  "#define TASK TASK_COMBINE\n", "scan.comp.glsl"));
 
-    validated = progManager.areProgramsValid();
+    validated = m_progManager.areProgramsValid();
 
     return validated;
   }
 
   void Sample::getScanPrograms( ScanSystem::Programs &scanprograms )
   {
-    scanprograms.prefixsum  = progManager.get( programs.scan_prefixsum );
-    scanprograms.offsets    = progManager.get( programs.scan_offsets );
-    scanprograms.combine    = progManager.get( programs.scan_combine );
+    scanprograms.prefixsum  = m_progManager.get( programs.scan_prefixsum );
+    scanprograms.offsets    = m_progManager.get( programs.scan_offsets );
+    scanprograms.combine    = m_progManager.get( programs.scan_combine );
   }
 
   void Sample::getCullPrograms( CullingSystem::Programs &cullprograms )
   {
-    cullprograms.bit_regular      = progManager.get( programs.bit_regular );
-    cullprograms.bit_temporallast = progManager.get( programs.bit_temporallast );
-    cullprograms.bit_temporalnew  = progManager.get( programs.bit_temporalnew );
-    cullprograms.depth_mips       = progManager.get( programs.depth_mips );
-    cullprograms.object_frustum   = progManager.get( programs.object_frustum );
-    cullprograms.object_hiz       = progManager.get( programs.object_hiz );
-    cullprograms.object_raster    = progManager.get( programs.object_raster );
+    cullprograms.bit_regular      = m_progManager.get( programs.bit_regular );
+    cullprograms.bit_temporallast = m_progManager.get( programs.bit_temporallast );
+    cullprograms.bit_temporalnew  = m_progManager.get( programs.bit_temporalnew );
+    cullprograms.depth_mips       = m_progManager.get( programs.depth_mips );
+    cullprograms.object_frustum   = m_progManager.get( programs.object_frustum );
+    cullprograms.object_hiz       = m_progManager.get( programs.object_hiz );
+    cullprograms.object_raster    = m_progManager.get( programs.object_raster );
   }
 
   static inline size_t snapdiv(size_t input, size_t align)
@@ -393,7 +404,7 @@ namespace ocull
   {
     { // Scene UBO
       newBuffer(buffers.scene_ubo);
-      glNamedBufferDataEXT(buffers.scene_ubo, sizeof(SceneData) + sizeof(GLuint64), NULL, GL_DYNAMIC_DRAW);
+      glNamedBufferData(buffers.scene_ubo, sizeof(SceneData) + sizeof(GLuint64), NULL, GL_DYNAMIC_DRAW);
     }
 
     { // Scene Geometry
@@ -433,10 +444,10 @@ namespace ocull
       }
 
       newBuffer(buffers.scene_ibo);
-      glNamedBufferDataEXT(buffers.scene_ibo, sceneMesh.getTriangleIndicesSize(), &sceneMesh.m_indicesTriangles[0], GL_STATIC_DRAW);
+      glNamedBufferData(buffers.scene_ibo, sceneMesh.getTriangleIndicesSize(), &sceneMesh.m_indicesTriangles[0], GL_STATIC_DRAW);
 
       newBuffer(buffers.scene_vbo);
-      glNamedBufferDataEXT(buffers.scene_vbo, sceneMesh.getVerticesSize(), &sceneMesh.m_vertices[0], GL_STATIC_DRAW);
+      glNamedBufferData(buffers.scene_vbo, sceneMesh.getVerticesSize(), &sceneMesh.m_vertices[0], GL_STATIC_DRAW);
 
 
       // Scene Objects
@@ -471,8 +482,8 @@ namespace ocull
           nv_math::rotation_mat4_y(frand()*nv_pi) *
           nv_math::scale_mat4( (vec3(scale) * (vec3(0.25f) + vec3(frand(),frand(),frand())*0.5f ))/float(grid) );
 
-        sceneMatrices.push_back(matrix);
-        sceneMatrices.push_back(nv_math::transpose(nv_math::invert(matrix)));
+        m_sceneMatrices.push_back(matrix);
+        m_sceneMatrices.push_back(nv_math::transpose(nv_math::invert(matrix)));
         matrixIndex.push_back(obj);
 
         // all have same bbox
@@ -485,57 +496,57 @@ namespace ocull
         cmd.baseInstance  = obj;
         cmd.instanceCount = 1;
 
-        sceneCmds.push_back(cmd);
+        m_sceneCmds.push_back(cmd);
         obj++;
       }
 
-      sceneMatricesAnimated.resize( sceneMatrices.size() );
+      m_sceneMatricesAnimated.resize( m_sceneMatrices.size() );
 
-      sceneVisBits.clear();
-      sceneVisBits.resize( snapdiv(sceneCmds.size(),32), 0xFFFFFFFF );
+      m_sceneVisBits.clear();
+      m_sceneVisBits.resize( snapdiv(m_sceneCmds.size(),32), 0xFFFFFFFF );
 
       newBuffer(buffers.scene_indirect);
-      glNamedBufferDataEXT(buffers.scene_indirect,sizeof(DrawCmd) * sceneCmds.size(), &sceneCmds[0], GL_STATIC_DRAW);
+      glNamedBufferData(buffers.scene_indirect,sizeof(DrawCmd) * m_sceneCmds.size(), &m_sceneCmds[0], GL_STATIC_DRAW);
 
       newBuffer(buffers.scene_matrices);
-      glNamedBufferDataEXT(buffers.scene_matrices, sizeof(mat4) * sceneMatrices.size(), &sceneMatrices[0], GL_STATIC_DRAW);
-      newTexture(textures.scene_matrices);
-      glTextureBufferEXT(textures.scene_matrices, GL_TEXTURE_BUFFER, GL_RGBA32F, buffers.scene_matrices);
+      glNamedBufferData(buffers.scene_matrices, sizeof(mat4) * m_sceneMatrices.size(), &m_sceneMatrices[0], GL_STATIC_DRAW);
+      newTexture(textures.scene_matrices, GL_TEXTURE_BUFFER);
+      glTextureBuffer(textures.scene_matrices, GL_RGBA32F, buffers.scene_matrices);
 
-      if (GLEW_ARB_bindless_texture){
+      if (has_GL_ARB_bindless_texture){
         GLuint64 handle = glGetTextureHandleARB(textures.scene_matrices);
         glMakeTextureHandleResidentARB(handle);
-        glNamedBufferSubDataEXT(buffers.scene_ubo, sizeof(SceneData), sizeof(GLuint64), &handle);
+        glNamedBufferSubData(buffers.scene_ubo, sizeof(SceneData), sizeof(GLuint64), &handle);
       }
 
       newBuffer(buffers.scene_bboxes);
-      glNamedBufferDataEXT(buffers.scene_bboxes, sizeof(CullBbox) * bboxes.size(), &bboxes[0], GL_STATIC_DRAW);
+      glNamedBufferData(buffers.scene_bboxes, sizeof(CullBbox) * bboxes.size(), &bboxes[0], GL_STATIC_DRAW);
       
       newBuffer(buffers.scene_matrixindices);
-      glNamedBufferDataEXT(buffers.scene_matrixindices, sizeof(int) * matrixIndex.size(), &matrixIndex[0], GL_STATIC_DRAW);
+      glNamedBufferData(buffers.scene_matrixindices, sizeof(int) * matrixIndex.size(), &matrixIndex[0], GL_STATIC_DRAW);
 
       // for culling
       newBuffer(buffers.cull_indirect);
-      glNamedBufferDataEXT(buffers.cull_indirect, sizeof(DrawCmd) * sceneCmds.size(), NULL, GL_DYNAMIC_COPY);
+      glNamedBufferData(buffers.cull_indirect, sizeof(DrawCmd) * m_sceneCmds.size(), NULL, GL_DYNAMIC_COPY);
 
       newBuffer(buffers.cull_counter);
-      glNamedBufferDataEXT(buffers.cull_counter, sizeof(int), NULL, GL_DYNAMIC_COPY);
+      glNamedBufferData(buffers.cull_counter, sizeof(int), NULL, GL_DYNAMIC_COPY);
 
       newBuffer(buffers.cull_output);
-      glNamedBufferDataEXT(buffers.cull_output, snapdiv( sceneCmds.size(), 32) * 32 * sizeof(int), NULL, GL_DYNAMIC_COPY);
+      glNamedBufferData(buffers.cull_output, snapdiv( m_sceneCmds.size(), 32) * 32 * sizeof(int), NULL, GL_DYNAMIC_COPY);
 
       newBuffer(buffers.cull_bits);
-      glNamedBufferDataEXT(buffers.cull_bits, snapdiv( sceneCmds.size(), 32) * sizeof(int), NULL, GL_DYNAMIC_COPY);
+      glNamedBufferData(buffers.cull_bits, snapdiv( m_sceneCmds.size(), 32) * sizeof(int), NULL, GL_DYNAMIC_COPY);
 
       newBuffer(buffers.cull_bitsLast);
-      glNamedBufferDataEXT(buffers.cull_bitsLast, snapdiv( sceneCmds.size(), 32) * sizeof(int), NULL, GL_DYNAMIC_COPY);
+      glNamedBufferData(buffers.cull_bitsLast, snapdiv( m_sceneCmds.size(), 32) * sizeof(int), NULL, GL_DYNAMIC_COPY);
 
       newBuffer(buffers.cull_bitsReadback);
-      glNamedBufferDataEXT(buffers.cull_bitsReadback, snapdiv( sceneCmds.size(), 32) * sizeof(int), NULL, GL_DYNAMIC_READ);
+      glNamedBufferData(buffers.cull_bitsReadback, snapdiv( m_sceneCmds.size(), 32) * sizeof(int), NULL, GL_DYNAMIC_READ);
 
       // for command list
 
-      if (bindlessVboUbo)
+      if (m_bindlessVboUbo)
       {
         glGetNamedBufferParameterui64vNV(buffers.scene_ubo, GL_BUFFER_GPU_ADDRESS_NV, &addresses.scene_ubo);
         glMakeNamedBufferResidentNV(buffers.scene_ubo, GL_READ_ONLY);
@@ -560,14 +571,14 @@ namespace ocull
         ubo.setBuffer(buffers.scene_ubo, addresses.scene_ubo, 0, sizeof(SceneData)+sizeof(GLuint64));
         ubo.setBinding(UBO_SCENE, NVTOKEN_STAGE_VERTEX);
 
-        offset = nvtokenEnqueue(tokenStream, ubo);
+        offset = nvtokenEnqueue(m_tokenStream, ubo);
         tokenObjects. push_back(-1);
         tokenSizes.   push_back(num32bit(sizeof(ubo)));
         tokenOffsets. push_back(num32bit(offset));
 
         ubo.setBinding(UBO_SCENE, NVTOKEN_STAGE_FRAGMENT);
 
-        offset = nvtokenEnqueue(tokenStream, ubo);
+        offset = nvtokenEnqueue(m_tokenStream, ubo);
         tokenObjects. push_back(-1);
         tokenSizes.   push_back(num32bit(sizeof(ubo)));
         tokenOffsets. push_back(num32bit(offset));
@@ -576,7 +587,7 @@ namespace ocull
         vbo.setBinding(0);
         vbo.setBuffer(buffers.scene_vbo, addresses.scene_vbo, 0);
 
-        offset = nvtokenEnqueue(tokenStream, vbo);
+        offset = nvtokenEnqueue(m_tokenStream, vbo);
         tokenObjects. push_back(-1);
         tokenSizes.   push_back(num32bit(sizeof(vbo)));
         tokenOffsets. push_back(num32bit(offset));
@@ -584,7 +595,7 @@ namespace ocull
         vbo.setBinding(1);
         vbo.setBuffer(buffers.scene_matrixindices, addresses.scene_matrixindices, 0);
 
-        offset = nvtokenEnqueue(tokenStream, vbo);
+        offset = nvtokenEnqueue(m_tokenStream, vbo);
         tokenObjects. push_back(-1);
         tokenSizes.   push_back(num32bit(sizeof(vbo)));
         tokenOffsets. push_back(num32bit(offset));
@@ -593,14 +604,14 @@ namespace ocull
         ibo.setBuffer(buffers.scene_ibo, addresses.scene_ibo);
         ibo.setType(GL_UNSIGNED_INT);
 
-        offset = nvtokenEnqueue(tokenStream, ibo);
+        offset = nvtokenEnqueue(m_tokenStream, ibo);
         tokenObjects. push_back(-1);
         tokenSizes.   push_back(num32bit(sizeof(ibo)));
         tokenOffsets. push_back(num32bit(offset));
       }
 
-      for (size_t i = 0; i < sceneCmds.size(); i++){
-        const DrawCmd& cmd = sceneCmds[i];
+      for (size_t i = 0; i < m_sceneCmds.size(); i++){
+        const DrawCmd& cmd = m_sceneCmds[i];
 
         // for commandlist token technique
         NVTokenDrawElemsInstanced drawtoken;
@@ -610,7 +621,7 @@ namespace ocull
         drawtoken.cmd.instanceCount = cmd.instanceCount;
         drawtoken.cmd.count         = cmd.count;
         drawtoken.cmd.mode          = GL_TRIANGLES;
-        offset = nvtokenEnqueue(tokenStream,drawtoken);
+        offset = nvtokenEnqueue(m_tokenStream,drawtoken);
 
         // In this simple case we have one token per "object",
         // but typically one would have multiple tokens (vbo,ibo...) per object
@@ -620,7 +631,7 @@ namespace ocull
         tokenSizes.   push_back(num32bit(sizeof(drawtoken)));
         tokenOffsets. push_back(num32bit(offset));
       }
-      numTokens = GLuint(tokenSizes.size());
+      m_numTokens = GLuint(tokenSizes.size());
       // pad to multiple of 4
       while(tokenSizes.size() % 4)
       {
@@ -629,36 +640,36 @@ namespace ocull
         tokenOffsets.push_back(0);
       }
 
-      tokenStreamCulled = tokenStream;
+      m_tokenStreamCulled = m_tokenStream;
 
       newBuffer(buffers.scene_token);
-      glNamedBufferDataEXT(buffers.scene_token, tokenStream.size(), &tokenStream[0], GL_STATIC_DRAW);
+      glNamedBufferData(buffers.scene_token, m_tokenStream.size(), &m_tokenStream[0], GL_STATIC_DRAW);
 
       // for command list culling
 
       newBuffer(buffers.scene_tokenSizes);
-      glNamedBufferDataEXT(buffers.scene_tokenSizes, tokenSizes.size() * sizeof(GLuint), &tokenSizes[0], GL_STATIC_DRAW);
+      glNamedBufferData(buffers.scene_tokenSizes, tokenSizes.size() * sizeof(GLuint), &tokenSizes[0], GL_STATIC_DRAW);
 
       newBuffer(buffers.scene_tokenOffsets);
-      glNamedBufferDataEXT(buffers.scene_tokenOffsets, tokenOffsets.size() * sizeof(GLuint), &tokenOffsets[0], GL_STATIC_DRAW);
+      glNamedBufferData(buffers.scene_tokenOffsets, tokenOffsets.size() * sizeof(GLuint), &tokenOffsets[0], GL_STATIC_DRAW);
 
       newBuffer(buffers.scene_tokenObjects);
-      glNamedBufferDataEXT(buffers.scene_tokenObjects, tokenObjects.size() * sizeof(GLint), &tokenObjects[0], GL_STATIC_DRAW);
+      glNamedBufferData(buffers.scene_tokenObjects, tokenObjects.size() * sizeof(GLint), &tokenObjects[0], GL_STATIC_DRAW);
 
       newBuffer(buffers.cull_token);
-      glNamedBufferDataEXT(buffers.cull_token, tokenStream.size(), NULL, GL_DYNAMIC_COPY);
+      glNamedBufferData(buffers.cull_token, m_tokenStream.size(), NULL, GL_DYNAMIC_COPY);
 
       newBuffer(buffers.cull_tokenEmulation); // only for emulation
-      glNamedBufferDataEXT(buffers.cull_tokenEmulation, tokenStream.size(), NULL, GL_DYNAMIC_READ);
+      glNamedBufferData(buffers.cull_tokenEmulation, m_tokenStream.size(), NULL, GL_DYNAMIC_READ);
 
       newBuffer(buffers.cull_tokenSizes);
-      glNamedBufferDataEXT(buffers.cull_tokenSizes, tokenSizes.size() * sizeof(GLuint), NULL, GL_DYNAMIC_COPY);
+      glNamedBufferData(buffers.cull_tokenSizes, tokenSizes.size() * sizeof(GLuint), NULL, GL_DYNAMIC_COPY);
 
       newBuffer(buffers.cull_tokenScan);
-      glNamedBufferDataEXT(buffers.cull_tokenScan, tokenSizes.size() * sizeof(GLuint), NULL, GL_DYNAMIC_COPY);
+      glNamedBufferData(buffers.cull_tokenScan, tokenSizes.size() * sizeof(GLuint), NULL, GL_DYNAMIC_COPY);
 
       newBuffer(buffers.cull_tokenScanOffsets);
-      glNamedBufferDataEXT(buffers.cull_tokenScanOffsets, ScanSystem::getOffsetSize(GLuint(tokenSizes.size())), NULL, GL_DYNAMIC_COPY);
+      glNamedBufferData(buffers.cull_tokenScanOffsets, ScanSystem::getOffsetSize(GLuint(tokenSizes.size())), NULL, GL_DYNAMIC_COPY);
     }
 
     return true;
@@ -668,7 +679,7 @@ namespace ocull
   bool Sample::initFramebuffers(int width, int height)
   {
 
-    newTexture(textures.scene_color);
+    newTexture(textures.scene_color, GL_TEXTURE_2D);
     glBindTexture (GL_TEXTURE_2D, textures.scene_color);
     glTexStorage2D(GL_TEXTURE_2D, 1, fboFormat, width, height);
 
@@ -679,7 +690,7 @@ namespace ocull
       dim/=2;
     }
 
-    newTexture(textures.scene_depthstencil);
+    newTexture(textures.scene_depthstencil, GL_TEXTURE_2D);
     glBindTexture (GL_TEXTURE_2D, textures.scene_depthstencil);
     glTexStorage2D(GL_TEXTURE_2D, levels, GL_DEPTH24_STENCIL8, width, height);
     glTexParameteri(GL_TEXTURE_2D,GL_TEXTURE_MIN_FILTER,GL_NEAREST_MIPMAP_NEAREST);
@@ -700,7 +711,7 @@ namespace ocull
 
   void Sample::initCullingJob(CullingSystem::Job& cullJob)
   {
-    cullJob.m_numObjects = (int)sceneCmds.size();
+    cullJob.m_numObjects = (int)m_sceneCmds.size();
 
     cullJob.m_bufferMatrices        = CullingSystem::Buffer(buffers.scene_matrices);
     cullJob.m_bufferObjectMatrix    = CullingSystem::Buffer(buffers.scene_matrixindices);
@@ -716,19 +727,19 @@ namespace ocull
 
   bool Sample::begin()
   {
-    statsPrint = false;
+    m_statsPrint = false;
 
-    TwInit(TW_OPENGL_CORE,NULL);
-    TwWindowSize(m_window.m_viewsize[0],m_window.m_viewsize[1]);
+    ImGuiH::Init(m_window.m_viewsize[0], m_window.m_viewsize[1], this);
+    ImGui::InitGL();
 
     glPixelStorei(GL_UNPACK_ALIGNMENT, 1);
     glEnable(GL_CULL_FACE);
     glEnable(GL_DEPTH_TEST);
     glDepthFunc(GL_LEQUAL);
 
-    cmdlistNative   = !!init_NV_command_list(NVPWindow::sysGetProcAddress);
-    bindlessVboUbo  = GLEW_NV_vertex_buffer_unified_memory && NVPWindow::sysExtensionSupported("GL_NV_uniform_buffer_unified_memory");
-    nvtokenInitInternals(cmdlistNative, bindlessVboUbo);
+    m_cmdlistNative   = has_GL_NV_command_list != 0;
+    m_bindlessVboUbo  = has_GL_NV_vertex_buffer_unified_memory && has_GL_NV_uniform_buffer_unified_memory;
+    nvtokenInitInternals(m_cmdlistNative, m_bindlessVboUbo);
 
     bool validated(true);
 
@@ -751,86 +762,93 @@ namespace ocull
     {
       CullingSystem::Programs cullprograms;
       getCullPrograms(cullprograms);
-      cullSys.init( cullprograms, false );
+      m_cullSys.init( cullprograms, false );
 
-      initCullingJob(cullJobReadback);
-      cullJobReadback.m_bufferVisBitsReadback = CullingSystem::Buffer(buffers.cull_bitsReadback);
+      initCullingJob(m_cullJobReadback);
+      m_cullJobReadback.m_bufferVisBitsReadback = CullingSystem::Buffer(buffers.cull_bitsReadback);
 
-      initCullingJob(cullJobIndirect);
-      cullJobIndirect.m_program_indirect_compact = progManager.get( programs.indirect_unordered );
-      cullJobIndirect.m_bufferObjectIndirects = CullingSystem::Buffer(buffers.scene_indirect);
-      cullJobIndirect.m_bufferIndirectCounter = CullingSystem::Buffer(buffers.cull_counter);
-      cullJobIndirect.m_bufferIndirectResult  = CullingSystem::Buffer(buffers.cull_indirect);
+      initCullingJob(m_cullJobIndirect);
+      m_cullJobIndirect.m_program_indirect_compact = m_progManager.get( programs.indirect_unordered );
+      m_cullJobIndirect.m_bufferObjectIndirects = CullingSystem::Buffer(buffers.scene_indirect);
+      m_cullJobIndirect.m_bufferIndirectCounter = CullingSystem::Buffer(buffers.cull_counter);
+      m_cullJobIndirect.m_bufferIndirectResult  = CullingSystem::Buffer(buffers.cull_indirect);
 
-      initCullingJob(cullJobToken);
-      cullJobToken.program_cmds   = progManager.get( programs.token_cmds );
-      cullJobToken.program_sizes  = progManager.get( programs.token_sizes );
-      cullJobToken.numTokens      = numTokens;
+      initCullingJob(M_cullJobToken);
+      M_cullJobToken.program_cmds   = m_progManager.get( programs.token_cmds );
+      M_cullJobToken.program_sizes  = m_progManager.get( programs.token_sizes );
+      M_cullJobToken.numTokens      = m_numTokens;
 
       // if we had multiple stateobjects, we would be using multiple sequences
       // where each sequence covers the token range per stateobject
       CullJobToken::Sequence sequence;
       sequence.first = 0;
-      sequence.num   = numTokens;
+      sequence.num   = m_numTokens;
       sequence.offset = 0;
-      sequence.endoffset = GLuint(tokenStream.size()/sizeof(GLuint));
-      cullJobToken.sequences.push_back(sequence);
+      sequence.endoffset = GLuint(m_tokenStream.size()/sizeof(GLuint));
+      M_cullJobToken.sequences.push_back(sequence);
 
 
-      cullJobToken.tokenOrig    = ScanSystem::Buffer(buffers.scene_token);
-      cullJobToken.tokenObjects = ScanSystem::Buffer(buffers.scene_tokenObjects);
-      cullJobToken.tokenOffsets = ScanSystem::Buffer(buffers.scene_tokenOffsets);
-      cullJobToken.tokenSizes   = ScanSystem::Buffer(buffers.scene_tokenSizes);
+      M_cullJobToken.tokenOrig    = ScanSystem::Buffer(buffers.scene_token);
+      M_cullJobToken.tokenObjects = ScanSystem::Buffer(buffers.scene_tokenObjects);
+      M_cullJobToken.tokenOffsets = ScanSystem::Buffer(buffers.scene_tokenOffsets);
+      M_cullJobToken.tokenSizes   = ScanSystem::Buffer(buffers.scene_tokenSizes);
 
-      cullJobToken.tokenOut           = ScanSystem::Buffer(buffers.cull_token);
-      cullJobToken.tokenOutSizes      = ScanSystem::Buffer(buffers.cull_tokenSizes);
-      cullJobToken.tokenOutScan       = ScanSystem::Buffer(buffers.cull_tokenScan);
-      cullJobToken.tokenOutScanOffset = ScanSystem::Buffer(buffers.cull_tokenScanOffsets);
+      M_cullJobToken.tokenOut           = ScanSystem::Buffer(buffers.cull_token);
+      M_cullJobToken.tokenOutSizes      = ScanSystem::Buffer(buffers.cull_tokenSizes);
+      M_cullJobToken.tokenOutScan       = ScanSystem::Buffer(buffers.cull_tokenScan);
+      M_cullJobToken.tokenOutScanOffset = ScanSystem::Buffer(buffers.cull_tokenScanOffsets);
     }
 
+    {
+      m_ui.enumAdd(GUI_ALGORITHM, CullingSystem::METHOD_FRUSTUM, "frustum");
+      m_ui.enumAdd(GUI_ALGORITHM, CullingSystem::METHOD_HIZ, "hiz");
+      m_ui.enumAdd(GUI_ALGORITHM, CullingSystem::METHOD_RASTER, "raster");
 
-    TwBar *bar = TwNewBar("mainbar");
-    TwDefine(" GLOBAL contained=true help='OpenGL samples.\nCopyright NVIDIA Corporation 2013-2014' ");
-    TwDefine(" mainbar position='0 0' size='250 140' color='0 0 0' alpha=128 valueswidth=fit ");
-    TwDefine((std::string(" mainbar label='") + PROJECT_NAME + "'").c_str());
+      m_ui.enumAdd(GUI_RESULT, RESULT_REGULAR_CURRENT, "regular current frame");
+      m_ui.enumAdd(GUI_RESULT, RESULT_REGULAR_LASTFRAME, "regular last frame");
+      m_ui.enumAdd(GUI_RESULT, RESULT_TEMPORAL_CURRENT, "temporal current frame");
 
-    TwEnumVal enumVals[] = {
-      {CullingSystem::METHOD_FRUSTUM,"frustum"},
-      {CullingSystem::METHOD_HIZ,"hiz"},
-      {CullingSystem::METHOD_RASTER,"raster"},
-    };
-    TwType algorithmType = TwDefineEnum("algorithm", enumVals, sizeof(enumVals)/sizeof(enumVals[0]));
-
-    TwEnumVal enumVals2[] = {
-      {RESULT_REGULAR_CURRENT,"regular current frame"},
-      {RESULT_REGULAR_LASTFRAME,"regular last frame"},
-      {RESULT_TEMPORAL_CURRENT,"temporal current frame"},
-    };
-    TwType resultType = TwDefineEnum("result", enumVals2, sizeof(enumVals2)/sizeof(enumVals2[0]));
-
-    TwEnumVal enumVals3[] = {
-      {DRAW_STANDARD,"standard CPU"},
-      {DRAW_MULTIDRAWINDIRECT,"MultiDrawIndirect GPU"},
-      {DRAW_TOKENBUFFER_EMULATION,"nvcmdlist emulation"},
-      {DRAW_TOKENBUFFER,"nvcmdlist GPU"},
-    };
-    TwType drawType = TwDefineEnum("draw", enumVals3, cmdlistNative ? 4 : 3);
-
-    TwAddVarRW(bar, "animate", TW_TYPE_FLOAT,  &tweak.animate, " label='turn speed' ");
-    TwAddVarRW(bar, "culling", TW_TYPE_BOOLCPP,  &tweak.culling, " label='culling' ");
-    TwAddVarRW(bar, "freeze", TW_TYPE_BOOLCPP,  &tweak.freeze, " label='freeze result' ");
-    TwAddVarRW(bar, "algorithm",  algorithmType, &tweak.method, " label='algorithm' ");
-    TwAddVarRW(bar, "result",  resultType, &tweak.result, " label='result' ");
-    TwAddVarRW(bar, "drawmode", drawType, &tweak.drawmode, " label='drawmode' ");
+      m_ui.enumAdd(GUI_DRAW, DRAW_STANDARD, "standard CPU");
+      m_ui.enumAdd(GUI_DRAW, DRAW_MULTIDRAWINDIRECT, "MultiDrawIndirect GPU");
+      m_ui.enumAdd(GUI_DRAW, DRAW_TOKENBUFFER_EMULATION, "nvcmdlist emulation");
+      if (m_cmdlistNative) {
+        m_ui.enumAdd(GUI_DRAW, DRAW_TOKENBUFFER, "nvcmdlist GPU");
+      }
+    }
 
     m_control.m_sceneOrbit = vec3(0.0f);
     m_control.m_sceneDimension = float(globalscale) * 2.0f;
     float dist = m_control.m_sceneDimension * 0.75f;
     m_control.m_viewMatrix = nv_math::look_at(m_control.m_sceneOrbit - normalize(vec3(1,0,-1))*dist, m_control.m_sceneOrbit, vec3(0,1,0));
 
-    statsTime = NVPWindow::sysGetTime();
+    m_statsTime = NVPWindow::sysGetTime();
 
     return validated;
+  }
+
+  void Sample::processUI(double time)
+  {
+    int width = m_window.m_viewsize[0];
+    int height = m_window.m_viewsize[1];
+
+    // Update imgui configuration
+    auto &imgui_io = ImGui::GetIO();
+    imgui_io.DeltaTime = static_cast<float>(time - m_uiTime);
+    imgui_io.DisplaySize = ImVec2(width, height);
+
+    m_uiTime = time;
+
+    ImGui::NewFrame();
+    ImGui::SetNextWindowSize(ImVec2(350, 0), ImGuiCond_FirstUseEver);
+    if (ImGui::Begin("NVIDIA " PROJECT_NAME, nullptr)) {
+      ImGui::SliderFloat("animate", &m_tweak.animate, 0.0f, 32.0f);
+      ImGui::Checkbox("culling", &m_tweak.culling);
+      ImGui::Checkbox("freeze result", &m_tweak.freeze);
+      m_ui.enumCombobox(GUI_ALGORITHM, "algorithm", &m_tweak.method);
+      m_ui.enumCombobox(GUI_RESULT, "result", &m_tweak.result);
+      m_ui.enumCombobox(GUI_DRAW, "drawmode", &m_tweak.drawmode);
+    }
+    ImGui::End();
   }
   
   void Sample::CullJobToken::resultFromBits( const CullingSystem::Buffer& bufferVisBitsCurrent )
@@ -918,7 +936,7 @@ namespace ocull
     glBindBuffer(GL_COPY_WRITE_BUFFER, buffers.cull_bitsLast);
     glClearBufferData(GL_COPY_WRITE_BUFFER, GL_R32UI, GL_RED_INTEGER, GL_UNSIGNED_INT, NULL);
     // current are all visible
-    memset(&sceneVisBits[0],0xFFFFFFFF,sizeof(int) * sceneVisBits.size() );
+    memset(&m_sceneVisBits[0],0xFFFFFFFF,sizeof(int) * m_sceneVisBits.size() );
   }
 
   void Sample::drawScene(bool depthonly, const char* what)
@@ -947,7 +965,7 @@ namespace ocull
 
     glEnableVertexAttribArray(VERTEX_MATRIXINDEX);
 
-    glUseProgram(progManager.get(programs.draw_scene));
+    glUseProgram(m_progManager.get(programs.draw_scene));
 
     // these bindings are replicated in the tokenbuffer as well
     glBindBufferBase(GL_UNIFORM_BUFFER, UBO_SCENE, buffers.scene_ubo);
@@ -956,30 +974,30 @@ namespace ocull
     glBindVertexBuffer(1,buffers.scene_matrixindices,0,sizeof(GLint));
 
 
-    if (!GLEW_ARB_bindless_texture){
+    if (!has_GL_ARB_bindless_texture){
       glActiveTexture(GL_TEXTURE0 + TEX_MATRICES);
       glBindTexture(GL_TEXTURE_BUFFER,textures.scene_matrices);
     }
 
-    if (tweak.drawmode == DRAW_MULTIDRAWINDIRECT){
-      glBindBuffer(GL_DRAW_INDIRECT_BUFFER, tweak.culling ? buffers.cull_indirect : buffers.scene_indirect );
-      if (tweak.culling){
+    if (m_tweak.drawmode == DRAW_MULTIDRAWINDIRECT){
+      glBindBuffer(GL_DRAW_INDIRECT_BUFFER, m_tweak.culling ? buffers.cull_indirect : buffers.scene_indirect );
+      if (m_tweak.culling){
         glMemoryBarrier(GL_COMMAND_BARRIER_BIT);
       }
-      glMultiDrawElementsIndirect(GL_TRIANGLES, GL_UNSIGNED_INT, NULL, (GLsizei)sceneCmds.size(), 0);
+      glMultiDrawElementsIndirect(GL_TRIANGLES, GL_UNSIGNED_INT, NULL, (GLsizei)m_sceneCmds.size(), 0);
       glBindBuffer(GL_DRAW_INDIRECT_BUFFER, 0);
     }
-    else if (tweak.drawmode == DRAW_TOKENBUFFER || tweak.drawmode == DRAW_TOKENBUFFER_EMULATION)
+    else if (m_tweak.drawmode == DRAW_TOKENBUFFER || m_tweak.drawmode == DRAW_TOKENBUFFER_EMULATION)
     {
-      if (bindlessVboUbo){
+      if (m_bindlessVboUbo){
         glEnableClientState(GL_UNIFORM_BUFFER_UNIFIED_NV);
         glEnableClientState(GL_VERTEX_ATTRIB_ARRAY_UNIFIED_NV);
         glEnableClientState(GL_ELEMENT_ARRAY_UNIFIED_NV);
       }
-      if (tweak.culling){
-        if (tweak.drawmode == DRAW_TOKENBUFFER_EMULATION){
+      if (m_tweak.culling){
+        if (m_tweak.drawmode == DRAW_TOKENBUFFER_EMULATION){
           NV_PROFILE_SECTION("Read");
-          cullJobToken.tokenOut.GetNamedBufferSubData(&tokenStreamCulled[0]);
+          M_cullJobToken.tokenOut.GetNamedBufferSubData(&m_tokenStreamCulled[0]);
         }
         else{
           glMemoryBarrier(GL_COMMAND_BARRIER_BIT);
@@ -989,21 +1007,21 @@ namespace ocull
       }
 
       GLintptr offset = 0;
-      GLsizei  size   = GLsizei(tokenStream.size());
-      if (tweak.drawmode == DRAW_TOKENBUFFER_EMULATION){
+      GLsizei  size   = GLsizei(m_tokenStream.size());
+      if (m_tweak.drawmode == DRAW_TOKENBUFFER_EMULATION){
         StateSystem::State state;
         state.vertexformat.bindings[0].stride = sizeof(Vertex);
         state.vertexformat.bindings[1].stride = sizeof(GLint);
 
-        const std::string& stream = tweak.culling ? tokenStreamCulled : tokenStream;
+        const std::string& stream = m_tweak.culling ? m_tokenStreamCulled : m_tokenStream;
 
         nvtokenDrawCommandsSW(GL_TRIANGLES, &stream[0], stream.size(), &offset, &size, 1, state);
       }
       else{
-        glDrawCommandsNV(GL_TRIANGLES, tweak.culling ? buffers.cull_token : buffers.scene_token, &offset, &size, 1);
+        glDrawCommandsNV(GL_TRIANGLES, m_tweak.culling ? buffers.cull_token : buffers.scene_token, &offset, &size, 1);
       }
       
-      if (bindlessVboUbo){
+      if (m_bindlessVboUbo){
         glDisableClientState(GL_UNIFORM_BUFFER_UNIFIED_NV);
         glDisableClientState(GL_VERTEX_ATTRIB_ARRAY_UNIFIED_NV);
         glDisableClientState(GL_ELEMENT_ARRAY_UNIFIED_NV);
@@ -1012,15 +1030,15 @@ namespace ocull
     }
     else{
       int visible = 0;
-      for (size_t i = 0; i < sceneCmds.size(); i++)
+      for (size_t i = 0; i < m_sceneCmds.size(); i++)
       {
-        if (sceneVisBits[i / 32] & (1<< (i%32)) ){
-          glDrawElementsIndirect(GL_TRIANGLES, GL_UNSIGNED_INT, &sceneCmds[i] );
+        if (m_sceneVisBits[i / 32] & (1<< (i%32)) ){
+          glDrawElementsIndirect(GL_TRIANGLES, GL_UNSIGNED_INT, &m_sceneCmds[i] );
           visible++;
         }
       }
-      if (statsPrint){
-        printf("%s visible: %d pct\n", what, (visible * 100) / sceneCmds.size() );
+      if (m_statsPrint){
+        LOGI("%s visible: %d pct\n", what, (visible * 100) / (int)m_sceneCmds.size() );
       }
     }
 
@@ -1034,7 +1052,7 @@ namespace ocull
     glBindVertexBuffer(0,0,0,0);
     glBindVertexBuffer(1,0,0,0);
     glBindBuffer(GL_ELEMENT_ARRAY_BUFFER, 0);
-    if (!GLEW_ARB_bindless_texture){
+    if (!has_GL_ARB_bindless_texture){
       glActiveTexture(GL_TEXTURE0 + TEX_MATRICES);
       glBindTexture(GL_TEXTURE_BUFFER,0);
     }
@@ -1049,19 +1067,19 @@ namespace ocull
   void Sample::drawCullingTemporal(CullingSystem::Job& cullJob)
   {
     CullingSystem::View view;
-    view.viewPos = sceneUbo.viewPos.get_value();
-    view.viewDir = sceneUbo.viewDir.get_value();
-    view.viewProjMatrix = sceneUbo.viewProjMatrix.get_value();
+    view.viewPos = m_sceneUbo.viewPos.get_value();
+    view.viewDir = m_sceneUbo.viewDir.get_value();
+    view.viewProjMatrix = m_sceneUbo.viewProjMatrix.get_value();
 
-    switch(tweak.method){
+    switch(m_tweak.method){
     case CullingSystem::METHOD_FRUSTUM:
     {
       // kinda pointless to use temporal ;)
       {
         NV_PROFILE_SECTION("CullF");
-        cullSys.buildOutput( tweak.method, cullJob, view );
-        cullSys.bitsFromOutput( cullJob, CullingSystem::BITS_CURRENT );
-        cullSys.resultFromBits( cullJob );
+        m_cullSys.buildOutput( m_tweak.method, cullJob, view );
+        m_cullSys.bitsFromOutput( cullJob, CullingSystem::BITS_CURRENT );
+        m_cullSys.resultFromBits( cullJob );
       }
 
       drawScene(false,"Scene");
@@ -1072,31 +1090,31 @@ namespace ocull
       {
         NV_PROFILE_SECTION("CullF");
 #if CULL_TEMPORAL_NOFRUSTUM
-        cullSys.resultFromBits( cullJob );
-        cullSys.swapBits( cullJob );  // last/output
+        m_cullSys.resultFromBits( cullJob );
+        m_cullSys.swapBits( cullJob );  // last/output
 #else
-        cullSys.buildOutput( CullingSystem::METHOD_FRUSTUM, cullJob, view );
-        cullSys.bitsFromOutput( cullJob, CullingSystem::BITS_CURRENT_AND_LAST );
-        cullSys.resultFromBits( cullJob );
+        m_cullSys.buildOutput( CullingSystem::METHOD_FRUSTUM, cullJob, view );
+        m_cullSys.bitsFromOutput( cullJob, CullingSystem::BITS_CURRENT_AND_LAST );
+        m_cullSys.resultFromBits( cullJob );
 #endif
       }
 
       drawScene(false,"Last");
 
       // changes FBO binding
-      cullSys.buildDepthMipmaps( textures.scene_depthstencil, m_window.m_viewsize[0], m_window.m_viewsize[1]);
+      m_cullSys.buildDepthMipmaps( textures.scene_depthstencil, m_window.m_viewsize[0], m_window.m_viewsize[1]);
 
       {
         NV_PROFILE_SECTION("CullH");
-        cullSys.buildOutput( CullingSystem::METHOD_HIZ, cullJob, view );
+        m_cullSys.buildOutput( CullingSystem::METHOD_HIZ, cullJob, view );
 
-        cullSys.bitsFromOutput( cullJob, CullingSystem::BITS_CURRENT_AND_NOT_LAST );
-        cullSys.resultFromBits( cullJob );
+        m_cullSys.bitsFromOutput( cullJob, CullingSystem::BITS_CURRENT_AND_NOT_LAST );
+        m_cullSys.resultFromBits( cullJob );
 
         // for next frame
-        cullSys.bitsFromOutput( cullJob, CullingSystem::BITS_CURRENT );
+        m_cullSys.bitsFromOutput( cullJob, CullingSystem::BITS_CURRENT );
 #if !CULL_TEMPORAL_NOFRUSTUM
-        cullSys.swapBits( cullJob );  // last/output
+        m_cullSys.swapBits( cullJob );  // last/output
 #endif
       }
 
@@ -1109,12 +1127,12 @@ namespace ocull
       {
         NV_PROFILE_SECTION("CullF");
 #if CULL_TEMPORAL_NOFRUSTUM
-        cullSys.resultFromBits( cullJob );
-        cullSys.swapBits( cullJob );  // last/output
+        m_cullSys.resultFromBits( cullJob );
+        m_cullSys.swapBits( cullJob );  // last/output
 #else
-        cullSys.buildOutput( CullingSystem::METHOD_FRUSTUM, cullJob, view );
-        cullSys.bitsFromOutput( cullJob, CullingSystem::BITS_CURRENT_AND_LAST );
-        cullSys.resultFromBits( cullJob );
+        m_cullSys.buildOutput( CullingSystem::METHOD_FRUSTUM, cullJob, view );
+        m_cullSys.bitsFromOutput( cullJob, CullingSystem::BITS_CURRENT_AND_LAST );
+        m_cullSys.resultFromBits( cullJob );
 #endif
       }
 
@@ -1122,14 +1140,14 @@ namespace ocull
 
       {
         NV_PROFILE_SECTION("CullR");
-        cullSys.buildOutput( CullingSystem::METHOD_RASTER, cullJob, view );
-        cullSys.bitsFromOutput( cullJob, CullingSystem::BITS_CURRENT_AND_NOT_LAST );
-        cullSys.resultFromBits( cullJob );
+        m_cullSys.buildOutput( CullingSystem::METHOD_RASTER, cullJob, view );
+        m_cullSys.bitsFromOutput( cullJob, CullingSystem::BITS_CURRENT_AND_NOT_LAST );
+        m_cullSys.resultFromBits( cullJob );
 
         // for next frame
-        cullSys.bitsFromOutput( cullJob, CullingSystem::BITS_CURRENT );
+        m_cullSys.bitsFromOutput( cullJob, CullingSystem::BITS_CURRENT );
 #if !CULL_TEMPORAL_NOFRUSTUM
-        cullSys.swapBits( cullJob );  // last/output
+        m_cullSys.swapBits( cullJob );  // last/output
 #endif
       }
 
@@ -1142,18 +1160,18 @@ namespace ocull
   void Sample::drawCullingRegular(CullingSystem::Job& cullJob)
   {
     CullingSystem::View view;
-    view.viewPos = sceneUbo.viewPos.get_value();
-    view.viewDir = sceneUbo.viewDir.get_value();
-    view.viewProjMatrix = sceneUbo.viewProjMatrix.get_value();
+    view.viewPos = m_sceneUbo.viewPos.get_value();
+    view.viewDir = m_sceneUbo.viewDir.get_value();
+    view.viewProjMatrix = m_sceneUbo.viewProjMatrix.get_value();
 
-    switch(tweak.method){
+    switch(m_tweak.method){
     case CullingSystem::METHOD_FRUSTUM:
       {
         {
           NV_PROFILE_SECTION("CullF");
-          cullSys.buildOutput( tweak.method, cullJob, view );
-          cullSys.bitsFromOutput( cullJob, CullingSystem::BITS_CURRENT );
-          cullSys.resultFromBits( cullJob );
+          m_cullSys.buildOutput( m_tweak.method, cullJob, view );
+          m_cullSys.bitsFromOutput( cullJob, CullingSystem::BITS_CURRENT );
+          m_cullSys.resultFromBits( cullJob );
         }
 
         drawScene(false,"Scene");
@@ -1163,9 +1181,9 @@ namespace ocull
       {
         {
           NV_PROFILE_SECTION("CullF");
-          cullSys.buildOutput( CullingSystem::METHOD_FRUSTUM, cullJob, view );
-          cullSys.bitsFromOutput( cullJob, CullingSystem::BITS_CURRENT );
-          cullSys.resultFromBits( cullJob );
+          m_cullSys.buildOutput( CullingSystem::METHOD_FRUSTUM, cullJob, view );
+          m_cullSys.bitsFromOutput( cullJob, CullingSystem::BITS_CURRENT );
+          m_cullSys.resultFromBits( cullJob );
         }
 
         drawScene(true,"Depth");
@@ -1173,15 +1191,15 @@ namespace ocull
         {
           NV_PROFILE_SECTION("Mip");
           // changes FBO binding
-          cullSys.buildDepthMipmaps( textures.scene_depthstencil, m_window.m_viewsize[0], m_window.m_viewsize[1]);
+          m_cullSys.buildDepthMipmaps( textures.scene_depthstencil, m_window.m_viewsize[0], m_window.m_viewsize[1]);
         }
 
 
         {
           NV_PROFILE_SECTION("CullH");
-          cullSys.buildOutput( CullingSystem::METHOD_HIZ, cullJob, view );
-          cullSys.bitsFromOutput( cullJob, CullingSystem::BITS_CURRENT );
-          cullSys.resultFromBits( cullJob );
+          m_cullSys.buildOutput( CullingSystem::METHOD_HIZ, cullJob, view );
+          m_cullSys.bitsFromOutput( cullJob, CullingSystem::BITS_CURRENT );
+          m_cullSys.resultFromBits( cullJob );
         }
 
         glBindFramebuffer(GL_FRAMEBUFFER, fbos.scene );
@@ -1192,9 +1210,9 @@ namespace ocull
       {
         {
           NV_PROFILE_SECTION("CullF");
-          cullSys.buildOutput( CullingSystem::METHOD_FRUSTUM, cullJob, view );
-          cullSys.bitsFromOutput( cullJob, CullingSystem::BITS_CURRENT );
-          cullSys.resultFromBits( cullJob );
+          m_cullSys.buildOutput( CullingSystem::METHOD_FRUSTUM, cullJob, view );
+          m_cullSys.bitsFromOutput( cullJob, CullingSystem::BITS_CURRENT );
+          m_cullSys.resultFromBits( cullJob );
         }
 
         drawScene(true,"Depth");
@@ -1202,9 +1220,9 @@ namespace ocull
 
         {
           NV_PROFILE_SECTION("CullR");
-          cullSys.buildOutput( CullingSystem::METHOD_RASTER, cullJob, view );
-          cullSys.bitsFromOutput( cullJob, CullingSystem::BITS_CURRENT );
-          cullSys.resultFromBits( cullJob );
+          m_cullSys.buildOutput( CullingSystem::METHOD_RASTER, cullJob, view );
+          m_cullSys.bitsFromOutput( cullJob, CullingSystem::BITS_CURRENT );
+          m_cullSys.resultFromBits( cullJob );
         }
 
         drawScene(false,"Scene");
@@ -1216,24 +1234,24 @@ namespace ocull
   void Sample::drawCullingRegularLastFrame(CullingSystem::Job& cullJob)
   {
     CullingSystem::View view;
-    view.viewPos = sceneUbo.viewPos.get_value();
-    view.viewDir = sceneUbo.viewDir.get_value();
-    view.viewProjMatrix = sceneUbo.viewProjMatrix.get_value();
+    view.viewPos = m_sceneUbo.viewPos.get_value();
+    view.viewDir = m_sceneUbo.viewDir.get_value();
+    view.viewProjMatrix = m_sceneUbo.viewProjMatrix.get_value();
 
-    switch(tweak.method){
+    switch(m_tweak.method){
     case CullingSystem::METHOD_FRUSTUM:
     {
       {
         NV_PROFILE_SECTION("Result");
-        cullSys.resultFromBits( cullJob );
+        m_cullSys.resultFromBits( cullJob );
       }
 
       drawScene(false,"Scene");
 
       {
         NV_PROFILE_SECTION("CullF");
-        cullSys.buildOutput( CullingSystem::METHOD_FRUSTUM, cullJob, view );
-        cullSys.bitsFromOutput( cullJob, CullingSystem::BITS_CURRENT );
+        m_cullSys.buildOutput( CullingSystem::METHOD_FRUSTUM, cullJob, view );
+        m_cullSys.bitsFromOutput( cullJob, CullingSystem::BITS_CURRENT );
       }
     }
     break;
@@ -1242,7 +1260,7 @@ namespace ocull
 
       {
         NV_PROFILE_SECTION("Result");
-        cullSys.resultFromBits( cullJob );
+        m_cullSys.resultFromBits( cullJob );
       }
 
       drawScene(false,"Scene");
@@ -1250,13 +1268,13 @@ namespace ocull
       {
         NV_PROFILE_SECTION("Mip");
         // changes FBO binding
-        cullSys.buildDepthMipmaps( textures.scene_depthstencil, m_window.m_viewsize[0], m_window.m_viewsize[1]);
+        m_cullSys.buildDepthMipmaps( textures.scene_depthstencil, m_window.m_viewsize[0], m_window.m_viewsize[1]);
       }
 
       {
         NV_PROFILE_SECTION("Cull");
-        cullSys.buildOutput( CullingSystem::METHOD_HIZ, cullJob, view );
-        cullSys.bitsFromOutput( cullJob, CullingSystem::BITS_CURRENT );
+        m_cullSys.buildOutput( CullingSystem::METHOD_HIZ, cullJob, view );
+        m_cullSys.bitsFromOutput( cullJob, CullingSystem::BITS_CURRENT );
       }
     }
     break;
@@ -1264,15 +1282,15 @@ namespace ocull
     {
       {
         NV_PROFILE_SECTION("Result");
-        cullSys.resultFromBits( cullJob );
+        m_cullSys.resultFromBits( cullJob );
       }
 
       drawScene(false,"Scene");
       
       {
         NV_PROFILE_SECTION("Cull");
-        cullSys.buildOutput( CullingSystem::METHOD_RASTER, cullJob, view );
-        cullSys.bitsFromOutput( cullJob, CullingSystem::BITS_CURRENT );
+        m_cullSys.buildOutput( CullingSystem::METHOD_RASTER, cullJob, view );
+        m_cullSys.bitsFromOutput( cullJob, CullingSystem::BITS_CURRENT );
       }
     }
     break;
@@ -1281,12 +1299,14 @@ namespace ocull
 
   void Sample::think(double time)
   {
+    processUI(time);
+
     m_control.processActions(m_window.m_viewsize,
       nv_math::vec2f(m_window.m_mouseCurrent[0],m_window.m_mouseCurrent[1]),
       m_window.m_mouseButtonFlags, m_window.m_wheel);
 
     if (m_window.onPress(KEY_R)){
-      progManager.reloadPrograms();
+      m_progManager.reloadPrograms();
 
       ScanSystem::Programs scanprograms;
       getScanPrograms(scanprograms);
@@ -1294,32 +1314,32 @@ namespace ocull
 
       CullingSystem::Programs cullprograms;
       getCullPrograms(cullprograms);
-      cullSys.update( cullprograms, false );
-      cullJobIndirect.m_program_indirect_compact = progManager.get( programs.indirect_unordered );
-      cullJobToken.program_cmds  = progManager.get( programs.token_cmds );
-      cullJobToken.program_sizes = progManager.get( programs.token_sizes );
+      m_cullSys.update( cullprograms, false );
+      m_cullJobIndirect.m_program_indirect_compact = m_progManager.get( programs.indirect_unordered );
+      M_cullJobToken.program_cmds  = m_progManager.get( programs.token_cmds );
+      M_cullJobToken.program_sizes = m_progManager.get( programs.token_sizes );
     }
 
-    if (!progManager.areProgramsValid()){
+    if (!m_progManager.areProgramsValid()){
       waitEvents();
       return;
     }
 
-    if ( memcmp(&tweak,&tweakLast,sizeof(Tweak)) != 0 && tweak.freeze == tweakLast.freeze) {
+    if ( memcmp(&m_tweak,&m_tweakLast,sizeof(Tweak)) != 0 && m_tweak.freeze == m_tweakLast.freeze) {
       systemChange();
-      tweak.freeze = false;
+      m_tweak.freeze = false;
     }
-    if (!tweak.culling || tweak.result == RESULT_TEMPORAL_CURRENT){
-      tweak.freeze = false;
+    if (!m_tweak.culling || m_tweak.result == RESULT_TEMPORAL_CURRENT){
+      m_tweak.freeze = false;
     }
 
 #if _DEBUG
-    if (tweak.drawmode != tweakLast.drawmode && GLEW_NV_shader_buffer_load){
+    if (m_tweak.drawmode != m_tweakLast.drawmode && has_GL_NV_shader_buffer_load){
       // disable a few expected but annoying debug messages for NVIDIA
-      if (tweakLast.drawmode == DRAW_TOKENBUFFER_EMULATION || tweakLast.drawmode == DRAW_TOKENBUFFER){
+      if (m_tweakLast.drawmode == DRAW_TOKENBUFFER_EMULATION || m_tweakLast.drawmode == DRAW_TOKENBUFFER){
         glDebugMessageControlARB(GL_DONT_CARE, GL_DONT_CARE, GL_DONT_CARE, 0, NULL, GL_TRUE);
       }
-      if (tweak.drawmode == DRAW_TOKENBUFFER_EMULATION || tweak.drawmode == DRAW_TOKENBUFFER){
+      if (m_tweak.drawmode == DRAW_TOKENBUFFER_EMULATION || m_tweak.drawmode == DRAW_TOKENBUFFER){
         GLuint msgid = 65537; // residency warning
         glDebugMessageControlARB(GL_DEBUG_SOURCE_API, GL_DEBUG_TYPE_OTHER, GL_DONT_CARE, 1, &msgid, GL_FALSE);
         msgid = 131186;       // emulation does GetData on buffer
@@ -1328,12 +1348,12 @@ namespace ocull
     }
 #endif
 
-    if ( tweak.drawmode == DRAW_STANDARD && (NVPWindow::sysGetTime() - statsTime) > 2.0){
-      statsTime = NVPWindow::sysGetTime();
-      statsPrint = true;
+    if ( m_tweak.drawmode == DRAW_STANDARD && (NVPWindow::sysGetTime() - m_statsTime) > 2.0){
+      m_statsTime = NVPWindow::sysGetTime();
+      m_statsPrint = true;
     }
     else{
-      statsPrint = false;
+      m_statsPrint = false;
     }
 
     int width   = m_window.m_viewsize[0];
@@ -1352,45 +1372,45 @@ namespace ocull
         nv_math::mat4 projection = nv_math::perspective((45.f), float(width)/float(height), 0.1f, 100.0f);
         nv_math::mat4 view = m_control.m_viewMatrix;
 
-        sceneUbo.viewProjMatrix = projection * view;
-        sceneUbo.viewMatrix = view;
-        sceneUbo.viewMatrixIT = nv_math::transpose(nv_math::invert(view));
+        m_sceneUbo.viewProjMatrix = projection * view;
+        m_sceneUbo.viewMatrix = view;
+        m_sceneUbo.viewMatrixIT = nv_math::transpose(nv_math::invert(view));
 
-        sceneUbo.viewPos = sceneUbo.viewMatrixIT.row(3);
-        sceneUbo.viewDir = -view.row(2);
+        m_sceneUbo.viewPos = m_sceneUbo.viewMatrixIT.row(3);
+        m_sceneUbo.viewDir = -view.row(2);
 
         glBindBuffer(GL_UNIFORM_BUFFER, buffers.scene_ubo);
-        glBufferSubData(GL_UNIFORM_BUFFER, 0, sizeof(SceneData), &sceneUbo);
+        glBufferSubData(GL_UNIFORM_BUFFER, 0, sizeof(SceneData), &m_sceneUbo);
       }
 
     }
 
-    if (tweak.animate)
+    if (m_tweak.animate)
     {
-      mat4 rotator = nv_math::rotation_mat4_y( float(time)*0.1f * tweak.animate);
+      mat4 rotator = nv_math::rotation_mat4_y( float(time)*0.1f * m_tweak.animate);
 
-      for (size_t i = 0; i < sceneMatrices.size()/2; i++){
-        mat4 changed = rotator * sceneMatrices[i*2 + 0];
-        sceneMatricesAnimated[i*2 + 0] = changed;
-        sceneMatricesAnimated[i*2 + 1] = nv_math::transpose(nv_math::invert(changed));
+      for (size_t i = 0; i < m_sceneMatrices.size()/2; i++){
+        mat4 changed = rotator * m_sceneMatrices[i*2 + 0];
+        m_sceneMatricesAnimated[i*2 + 0] = changed;
+        m_sceneMatricesAnimated[i*2 + 1] = nv_math::transpose(nv_math::invert(changed));
       }
 
-      glNamedBufferSubDataEXT(buffers.scene_matrices,0,sizeof(mat4)*sceneMatricesAnimated.size(), &sceneMatricesAnimated[0] );
+      glNamedBufferSubData(buffers.scene_matrices,0,sizeof(mat4)*m_sceneMatricesAnimated.size(), &m_sceneMatricesAnimated[0] );
     }
 
 
-    if (tweak.culling && !tweak.freeze) {
+    if (m_tweak.culling && !m_tweak.freeze) {
 
-      cullJobReadback.m_hostVisBits = &sceneVisBits[0];
+      m_cullJobReadback.m_hostVisBits = &m_sceneVisBits[0];
 
       // We change the output buffer for token emulation, as once the driver sees frequent readbacks on buffers
       // it moves the allocation to read-friendly memory. This would be bad for the native tokenbuffer.
-      cullJobToken.tokenOut.buffer = (tweak.drawmode == DRAW_TOKENBUFFER_EMULATION ? buffers.cull_tokenEmulation : buffers.cull_token);
+      M_cullJobToken.tokenOut.buffer = (m_tweak.drawmode == DRAW_TOKENBUFFER_EMULATION ? buffers.cull_tokenEmulation : buffers.cull_token);
 
-      CullingSystem::Job&  cullJob = tweak.drawmode == DRAW_STANDARD ? (CullingSystem::Job&)cullJobReadback : 
-        (tweak.drawmode == DRAW_MULTIDRAWINDIRECT ? (CullingSystem::Job&)cullJobIndirect : (CullingSystem::Job&)cullJobToken);
+      CullingSystem::Job&  cullJob = m_tweak.drawmode == DRAW_STANDARD ? (CullingSystem::Job&)m_cullJobReadback : 
+        (m_tweak.drawmode == DRAW_MULTIDRAWINDIRECT ? (CullingSystem::Job&)m_cullJobIndirect : (CullingSystem::Job&)M_cullJobToken);
       
-      switch(tweak.result)
+      switch(m_tweak.result)
       {
       case RESULT_REGULAR_CURRENT:
         drawCullingRegular(cullJob);
@@ -1407,8 +1427,8 @@ namespace ocull
       drawScene(false,"Draw");
     }
 
-    if (statsPrint){
-      printf("\n");
+    if (m_statsPrint){
+      LOGI("\n");
     }
 
 
@@ -1418,17 +1438,19 @@ namespace ocull
     glBlitFramebuffer(0,0,width,height,
       0,0,width,height,GL_COLOR_BUFFER_BIT, GL_NEAREST);
 
-    tweakLast = tweak;
+    m_tweakLast = m_tweak;
 
     {
-      NV_PROFILE_SECTION("TwDraw");
-      TwDraw();
+      NV_PROFILE_SECTION("GUI");
+      ImGui::Render();
+      ImGui::RenderDrawDataGL(ImGui::GetDrawData());
     }
+
+    ImGui::EndFrame();
   }
 
   void Sample::resize(int width, int height)
   {
-    TwWindowSize(width,height);
     initFramebuffers(width,height);
   }
 
@@ -1438,6 +1460,7 @@ using namespace ocull;
 
 int sample_main(int argc, const char** argv)
 {
+  SETLOGFILENAME();
   Sample sample;
   return sample.run(
     PROJECT_NAME,
