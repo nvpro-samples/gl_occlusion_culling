@@ -51,7 +51,13 @@ The culling itself is implemented in the *cullingsystem.cpp/hpp* files. It may u
 How the results are processed is also influenced by how we draw the scene. To allow drawing the entire scene with little state changes we leverage a trick to pass a unique vertex attribute per-drawcall using the *BaseInstance*. This attribute encodes our matrix index for the GL_TEXTURE_BUFFER, which sores all matrices. To make use of it, the vertex divisor for this attribute is set to a non zero value, since we don't really use instancing we sort of hijack the value. This technique is also described [here on slide 27](http://on-demand.gputechconf.com/gtc/2013/presentations/S3032-Advanced-Scenegraph-Rendering-Pipeline.pdf).
 
 - **Standard CPU:**
-We read the results back to the host memory, which stalls the pipeline. The impact of this can be reduced a bit by using *Last Frame* results. Note that Quadro cards typically behave better than GeForce when it comes to read backs.
+We read the results back to the host memory, which stalls the pipeline. The impact of this can be reduced a bit by using *Last Frame* results.
+
+Especially on OpenGL 4.x you want to use "persistent mapped" buffers in the *Last Frame* scenario. The GPU always operates on a dedicated buffer to compute the results, then copies to
+a persistent mapped dedicated readback buffer (server-side copy). You can either use different buffers or just shift the offsets within the readback buffer every other frame. At the end of the buffer to buffer copy
+retrieve a fence sync and then in the next frame use a client wait before actually accessing the host mapped pointer.
+The occlusion culling results should be copied after doing the occlusion-tests and ideally before doing any post-processing, this way we can reduce the wait time on the client. 
+
 - **MultiDrawIndirect GPU:**
 This technique leverages the **ARB_multi_draw_indirect** and is free of synchronization. Instead of reading back the results, we manipulate the **GL_DRAW_INDIRECT_BUFFER**. The indirect buffer is cleared to 0, which means it would not render anything if executed. Then we use an **GL_ATOMIC_COUNTER_BUFFER** to append all the visible DrawIndirect structures into this buffer.
 > **Note**: Despite having the final drawindirect count available on the GPU through the atomic counter, the sample does not make use GL_ARB_indirect_parameters. Its usage comes with a certain overhead that may make things worse if the drawcalls have only low complexity. 

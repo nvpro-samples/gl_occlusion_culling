@@ -1,4 +1,4 @@
-/* Copyright (c) 2014-2018, NVIDIA CORPORATION. All rights reserved.
+/* Copyright (c) 2014-2019, NVIDIA CORPORATION. All rights reserved.
  *
  * Redistribution and use in source and binary forms, with or without
  * modification, are permitted provided that the following conditions
@@ -48,8 +48,10 @@ void CullingSystem::update( const Programs &programs, bool dualindex )
 {
   m_programs = programs;
   m_dualindex = dualindex;
-  m_usessbo = has_GL_VERSION_4_2 != 0;
-  if (!m_usessbo)
+  m_useSSBO = has_GL_VERSION_4_2 != 0;
+  m_useRepesentativeTest = !!has_GL_NV_representative_fragment_test;
+
+  if (!m_useSSBO)
   {
     const char* xfbstreams[] = {"outstream"};
     glTransformFeedbackVaryings(programs.bit_regular,1,xfbstreams,GL_INTERLEAVED_ATTRIBS);
@@ -188,12 +190,15 @@ void CullingSystem::testBboxes( Job &job, bool raster )
   }
 
   if (raster){
+    if (m_useRepesentativeTest) {
+      glEnable( GL_REPRESENTATIVE_FRAGMENT_TEST_NV );
+    }
 #if !DEBUG_VISIBLEBOXES
     glDepthMask(GL_FALSE);
     glColorMask(GL_FALSE,GL_FALSE,GL_FALSE,GL_FALSE);
 #endif
   }
-  else if (m_usessbo){
+  else if (m_useSSBO){
     glEnable(GL_RASTERIZER_DISCARD);
     job.m_bufferVisOutput.BindBufferRange(GL_SHADER_STORAGE_BUFFER,0);
   }
@@ -207,12 +212,15 @@ void CullingSystem::testBboxes( Job &job, bool raster )
   glDrawArrays(GL_POINTS,0,job.m_numObjects);
 
   if (raster){
+    if (m_useRepesentativeTest) {
+      glDisable( GL_REPRESENTATIVE_FRAGMENT_TEST_NV );
+    }
 #if !DEBUG_VISIBLEBOXES
     glDepthMask(GL_TRUE);
     glColorMask(GL_TRUE,GL_TRUE,GL_TRUE,GL_TRUE);
 #endif
   }
-  else if (m_usessbo){
+  else if (m_useSSBO){
     glBindBufferBase(GL_SHADER_STORAGE_BUFFER,0,0);
     glDisable(GL_RASTERIZER_DISCARD);
   }
@@ -262,7 +270,7 @@ void CullingSystem::bitsFromOutput( Job &job, BitType type)
     glEnableVertexAttribArray(9);
   }
 
-  if (m_usessbo){
+  if (m_useSSBO){
     job.m_bufferVisBitsCurrent.BindBufferRange(GL_SHADER_STORAGE_BUFFER,0);
     glMemoryBarrier(GL_VERTEX_ATTRIB_ARRAY_BARRIER_BIT);
   }
@@ -273,7 +281,7 @@ void CullingSystem::bitsFromOutput( Job &job, BitType type)
 
   glDrawArrays(GL_POINTS,0, minDivide(job.m_numObjects,32));
 
-  if (m_usessbo){
+  if (m_useSSBO){
     glBindBufferBase(GL_SHADER_STORAGE_BUFFER, 0, 0);
     glBindBufferBase(GL_SHADER_STORAGE_BUFFER, 1, 0);
   }
@@ -294,6 +302,11 @@ void CullingSystem::bitsFromOutput( Job &job, BitType type)
 void CullingSystem::resultFromBits( Job &job )
 {
   job.resultFromBits(job.m_bufferVisBitsCurrent);
+}
+
+void CullingSystem::resultClient(Job &job)
+{
+  job.resultClient();
 }
 
 void CullingSystem::buildOutput( MethodType method, Job &job, const View& view )
@@ -384,6 +397,36 @@ void CullingSystem::JobReadback::resultFromBits( const Buffer& bufferVisBitsCurr
   GLsizeiptr size = sizeof(int) * minDivide(m_numObjects,32);
   glBindBuffer(GL_COPY_READ_BUFFER, bufferVisBitsCurrent.buffer );
   glBindBuffer(GL_COPY_WRITE_BUFFER, m_bufferVisBitsReadback.buffer );
-  glCopyBufferSubData(GL_COPY_READ_BUFFER,GL_COPY_WRITE_BUFFER,bufferVisBitsCurrent.offset,m_bufferVisBitsReadback.offset,size);
-  glGetBufferSubData(GL_COPY_WRITE_BUFFER,0, size, m_hostVisBits);
+  glCopyBufferSubData(GL_COPY_READ_BUFFER, GL_COPY_WRITE_BUFFER, bufferVisBitsCurrent.offset, m_bufferVisBitsReadback.offset, size);
+  glBindBuffer( GL_COPY_READ_BUFFER, 0 );
+  glBindBuffer( GL_COPY_WRITE_BUFFER, 0 );
+}
+
+void CullingSystem::JobReadback::resultClient()
+{
+  glBindBuffer(GL_COPY_WRITE_BUFFER, m_bufferVisBitsReadback.buffer);
+  glGetBufferSubData(GL_COPY_WRITE_BUFFER, m_bufferVisBitsReadback.offset, m_bufferVisBitsReadback.size, m_hostVisBits);
+  glBindBuffer( GL_COPY_WRITE_BUFFER, 0);
+}
+
+void CullingSystem::JobReadbackPersistent::resultFromBits(const Buffer& bufferVisBitsCurrent)
+{
+  GLsizeiptr size = sizeof( int ) * minDivide( m_numObjects, 32 );
+  glCopyNamedBufferSubData( bufferVisBitsCurrent.buffer, m_bufferVisBitsReadback.buffer, bufferVisBitsCurrent.offset, m_bufferVisBitsReadback.offset, size);
+  if (m_fence) {
+    glDeleteSync( m_fence );
+  }
+  m_fence = glFenceSync(GL_SYNC_GPU_COMMANDS_COMPLETE, 0);
+}
+
+void CullingSystem::JobReadbackPersistent::resultClient()
+{
+  if (m_fence) {
+    GLsizeiptr size = sizeof( int ) * minDivide( m_numObjects, 32 );
+    // as some samples readback within same frame (not recommended) we use the flush here
+    glClientWaitSync(m_fence, GL_SYNC_FLUSH_COMMANDS_BIT, GL_TIMEOUT_IGNORED);
+    glDeleteSync(m_fence);
+    m_fence = NULL;
+    memcpy( m_hostVisBits, ((uint8_t*)m_bufferVisBitsMapping) + m_bufferVisBitsReadback.offset, size );
+  }
 }
