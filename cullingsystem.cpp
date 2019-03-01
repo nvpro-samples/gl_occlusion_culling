@@ -423,7 +423,7 @@ void CullingSystem::JobReadbackPersistent::resultClient()
 {
   if (m_fence) {
     GLsizeiptr size = sizeof( int ) * minDivide( m_numObjects, 32 );
-    // as some samples readback within same frame (not recommended) we use the flush here
+    // as some samples read-back within same frame (not recommended) we use the flush here, normally one wouldn’t use it
     glClientWaitSync(m_fence, GL_SYNC_FLUSH_COMMANDS_BIT, GL_TIMEOUT_IGNORED);
     glDeleteSync(m_fence);
     m_fence = NULL;
