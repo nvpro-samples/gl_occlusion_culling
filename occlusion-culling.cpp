@@ -954,6 +954,11 @@ namespace ocull
     glClearBufferData(GL_COPY_WRITE_BUFFER, GL_R32UI, GL_RED_INTEGER, GL_UNSIGNED_INT, NULL);
     // current are all visible
     memset(m_sceneVisBits.data(),0xFFFFFFFF,sizeof(int) * m_sceneVisBits.size() );
+    // rest token buffer
+    glCopyNamedBufferSubData(buffers.scene_token, buffers.cull_token, 0, 0, m_tokenStream.size());
+    glCopyNamedBufferSubData(buffers.scene_token, buffers.cull_tokenEmulation, 0, 0, m_tokenStream.size());
+    // reset indirect buffer
+    glCopyNamedBufferSubData(buffers.scene_indirect, buffers.cull_indirect, 0, 0, m_sceneCmds.size() * sizeof(DrawCmd));
   }
 
   void Sample::drawScene(bool depthonly, const char* what)
