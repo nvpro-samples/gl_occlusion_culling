@@ -26,7 +26,7 @@
  */
 
 
-#version 330
+#version 430
 /**/
 
 #ifndef MATRIX_WORLD
@@ -41,11 +41,30 @@
 #define MATRICES        2
 #endif
 
-#extension GL_ARB_explicit_attrib_location : require
-#extension GL_ARB_shader_storage_buffer_object : enable
+//////////////////////////////////////////////
 
+layout(binding=0, std140) uniform viewBuffer {
+  mat4    viewProjTM;
+  vec3    viewDir;
+  vec3    viewPos;
+  vec2    viewSize;
+  float   viewCullThreshold;
+};
 
-//#define OCCLUSION
+layout(binding=0) uniform samplerBuffer matricesTex;
+#ifdef DUALINDEX
+layout(binding=1) uniform samplerBuffer bboxesTex;
+#endif
+
+layout(std430,binding=0) buffer visibleBuffer {
+  int visibles[];
+};
+
+#ifdef OCCLUSION
+layout(binding=2) uniform sampler2D depthTex;
+#endif
+
+//////////////////////////////////////////////
 
 #ifdef DUALINDEX
 layout(location=0) in int  bboxIndex;
@@ -60,31 +79,7 @@ layout(location=1) in vec4 bboxMax;
 layout(location=2) in int  matrixIndex;
 #endif
 
-#if GL_ARB_shader_storage_buffer_object
-layout(std430,binding=0)  writeonly buffer outputBuffer {
-  int outstream[];
-};
-
-void storeOutput(int value)
-{
-  outstream[gl_VertexID] = value;
-}
-
-#else
-flat out int outstream;
-
-void storeOutput(int value)
-{
-  outstream = value;
-}
-#endif
-
-uniform mat4              viewProjTM;
-uniform samplerBuffer     matricesTex;
-
-#ifdef OCCLUSION
-uniform sampler2D         depthTex;
-#endif
+//////////////////////////////////////////////
 
 vec4 getBoxCorner(int n)
 {
@@ -109,13 +104,31 @@ vec4 getBoxCorner(int n)
 
 }
 
-vec3 projected(mat4 a, vec4 pos) {
-  vec4 hpos = (a * pos);
-  return hpos.xyz/hpos.w;
+uint getCullBits(vec4 hPos)
+{
+  uint cullBits = 0;
+  cullBits |= hPos.x < -hPos.w ?  1 : 0;
+  cullBits |= hPos.x >  hPos.w ?  2 : 0;
+  cullBits |= hPos.y < -hPos.w ?  4 : 0;
+  cullBits |= hPos.y >  hPos.w ?  8 : 0;
+  cullBits |= hPos.z < -hPos.w ? 16 : 0;
+  cullBits |= hPos.z >  hPos.w ? 32 : 0;
+  cullBits |= hPos.w <= 0      ? 64 : 0; 
+  return cullBits;
+}
+
+vec3 projected(vec4 pos) {
+  return pos.xyz/pos.w;
+}
+
+bool pixelCull(vec3 clipmin, vec3 clipmax)
+{
+  vec2 dim = (clipmax.xy - clipmin.xy) * 0.5 * viewSize;;
+  return  max(dim.x, dim.y) < viewCullThreshold;
 }
 
 void main (){
-  int isvisible = 0;
+  bool isVisible = false;
   int matindex = (matrixIndex*MATRICES + MATRIX_WORLD)*4;
   mat4 worldTM = mat4(
     texelFetch(matricesTex,matindex + 0),
@@ -126,25 +139,23 @@ void main (){
   mat4 worldViewProjTM = (viewProjTM * worldTM);
   
   // clipspace bbox
-  vec3 clipmin  = projected(worldViewProjTM, getBoxCorner(0));
+  vec4 hPos0    = worldViewProjTM * getBoxCorner(0);
+  vec3 clipmin  = projected(hPos0);
   vec3 clipmax  = clipmin;
+  uint clipbits = getCullBits(hPos0);
 
   for (int n = 1; n < 8; n++){
-    vec3 ab = projected(worldViewProjTM, getBoxCorner(n));
-    clipmin = min(clipmin,ab);
-    clipmax = max(clipmax,ab);
+    vec4 hPos   = worldViewProjTM * getBoxCorner(n);
+    vec3 ab     = projected(hPos);
+    clipmin     = min(clipmin,ab);
+    clipmax     = max(clipmax,ab);
+    clipbits    &= getCullBits(hPos);
   }
 
-  isvisible = (
-    clipmin.x <= 1 &&
-    clipmin.y <= 1 &&
-    clipmin.z <= 1 &&
-    clipmax.x >= -1 &&
-    clipmax.y >= -1 &&
-    clipmax.z >= -1) ? 1 : 0;
+  isVisible = (clipbits == 0 && !pixelCull(clipmin, clipmax));
 
 #ifdef OCCLUSION
-  if (isvisible != 0){
+  if (isVisible){
     clipmin = clipmin * 0.5 + 0.5;
     clipmax = clipmax * 0.5 + 0.5;
     vec2 size = (clipmax.xy - clipmin.xy);
@@ -159,9 +170,9 @@ void main (){
     float d = textureLod(depthTex,vec2(clipmin.x,clipmax.y),miplevel).r;
     depth = max(depth,max(max(max(a,b),c),d));
 
-    isvisible =  clipmin.z <= depth ? 1 : 0;
+    isVisible =  clipmin.z <= depth;
   }
 #endif
   
-  storeOutput(isvisible);
+  visibles[gl_VertexID] = isVisible ? 1 : 0;
 }

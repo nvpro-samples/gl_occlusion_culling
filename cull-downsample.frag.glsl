@@ -26,12 +26,12 @@
  */
 
 
-#version 330 
+#version 430 
 /**/
 
-uniform sampler2D depthTex;
-uniform int       depthLod;
-uniform bool      evenLod;
+layout(location=0) uniform int       depthLod;
+layout(location=1) uniform bool      evenLod;
+layout(binding=0)  uniform sampler2D depthTex;
 
 in vec2 uv;
 

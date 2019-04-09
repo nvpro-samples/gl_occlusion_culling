@@ -21,6 +21,20 @@
 #define PERSPECTIVE     1
 #endif
 
+//////////////////////////////////////////////
+
+layout(binding=0, std140) uniform viewBuffer {
+  mat4    viewProjTM;
+  vec3    viewDir;
+  vec3    viewPos;
+  vec2    viewSize;
+  float   viewCullThreshold;
+};
+
+layout(binding=0) uniform samplerBuffer matricesTex;
+
+/////////////////////////////////////////////
+
 #if PERSPECTIVE
   // not so trivial to find the 3 visible sides, let hw do the culling
   layout(points,invocations=6) in;  
@@ -40,12 +54,11 @@ in VertexOut{
 
 flat out int objid;
 
-uniform vec3 viewDir;
-uniform mat4 viewProjTM;
-uniform samplerBuffer matricesTex;
+////////////////////////////////////////////
 
 void main()
 {
+  if (IN[0].objid == ~0) return;
 
   int  matindex = (IN[0].matrixIndex*MATRICES + MATRIX_WORLD)*4;
   mat4 worldTM = mat4(
@@ -99,33 +112,39 @@ void main()
   edgeBasis0 = mat3(worldTM) * (edgeBasis0);
   edgeBasis1 = mat3(worldTM) * (edgeBasis1) * proj;
   
-  objid = IN[0].objid;
-  
   vec3 worldCtr = (worldTM * vec4(IN[0].bboxCtr,1)).xyz;
   
 #if FLIPWIND
+  objid = IN[0].objid;
   gl_Position = viewProjTM * vec4(worldCtr + (faceNormal - edgeBasis0 - edgeBasis1),1);
   EmitVertex();
   
+  objid = IN[0].objid;
   gl_Position = viewProjTM * vec4(worldCtr + (faceNormal + edgeBasis0 - edgeBasis1),1);
   EmitVertex();
   
+  objid = IN[0].objid;
   gl_Position = viewProjTM * vec4(worldCtr + (faceNormal - edgeBasis0 + edgeBasis1),1);
   EmitVertex();
   
+  objid = IN[0].objid;
   gl_Position = viewProjTM * vec4(worldCtr + (faceNormal + edgeBasis0 + edgeBasis1),1);
   EmitVertex();
   
 #else
+  objid = IN[0].objid;
   gl_Position = viewProjTM * vec4(worldCtr + (faceNormal - edgeBasis0 - edgeBasis1),1);
   EmitVertex();
   
+  objid = IN[0].objid;
   gl_Position = viewProjTM * vec4(worldCtr + (faceNormal - edgeBasis0 + edgeBasis1),1);
   EmitVertex();
   
+  objid = IN[0].objid;
   gl_Position = viewProjTM * vec4(worldCtr + (faceNormal + edgeBasis0 - edgeBasis1),1);
   EmitVertex();
   
+  objid = IN[0].objid;
   gl_Position = viewProjTM * vec4(worldCtr + (faceNormal + edgeBasis0 + edgeBasis1),1);
   EmitVertex();
 #endif

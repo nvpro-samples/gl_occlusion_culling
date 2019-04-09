@@ -42,64 +42,17 @@ void CullingSystem::init( const Programs &programs, bool dualindex )
   update(programs,dualindex);
   glGenFramebuffers(1,&m_fbo);
   glCreateTextures(GL_TEXTURE_BUFFER,2,m_tbo);
+  glGenBuffers(1, &m_ubo);
+  glBindBuffer(GL_UNIFORM_BUFFER, m_ubo);
+  glBufferData(GL_UNIFORM_BUFFER, sizeof(View), nullptr, GL_DYNAMIC_DRAW);
+  glBindBuffer(GL_UNIFORM_BUFFER, 0);
 }
 
 void CullingSystem::update( const Programs &programs, bool dualindex )
 {
   m_programs = programs;
   m_dualindex = dualindex;
-  m_useSSBO = has_GL_VERSION_4_2 != 0;
   m_useRepesentativeTest = !!has_GL_NV_representative_fragment_test;
-
-  if (!m_useSSBO)
-  {
-    const char* xfbstreams[] = {"outstream"};
-    glTransformFeedbackVaryings(programs.bit_regular,1,xfbstreams,GL_INTERLEAVED_ATTRIBS);
-    glLinkProgram(programs.bit_regular);
-
-    glTransformFeedbackVaryings(programs.bit_temporallast,1,xfbstreams,GL_INTERLEAVED_ATTRIBS);
-    glLinkProgram(programs.bit_temporallast);
-
-    glTransformFeedbackVaryings(programs.bit_temporalnew,1,xfbstreams,GL_INTERLEAVED_ATTRIBS);
-    glLinkProgram(programs.bit_temporalnew);
-
-    glTransformFeedbackVaryings(programs.object_frustum,1,xfbstreams,GL_INTERLEAVED_ATTRIBS);
-    glLinkProgram(programs.object_frustum);
-
-    glTransformFeedbackVaryings(programs.object_hiz,1,xfbstreams,GL_INTERLEAVED_ATTRIBS);
-    glLinkProgram(programs.object_hiz);
-  }
-
-  glUseProgram(programs.depth_mips);
-  glUniform1i(glGetUniformLocation(programs.depth_mips,"depthTex"),0);
-  m_uniforms.depth_lod = glGetUniformLocation(programs.depth_mips,"depthLod");
-  m_uniforms.depth_even = glGetUniformLocation(programs.depth_mips,"evenLod");
-
-  glUseProgram(programs.object_frustum);
-  glUniform1i(glGetUniformLocation(programs.object_frustum,"matricesTex"),0);
-  if (dualindex){
-    glUniform1i(glGetUniformLocation(programs.object_frustum,"bboxesTex"),1);
-  }
-  m_uniforms.frustum_viewProj = glGetUniformLocation(programs.object_frustum, "viewProjTM");
-
-  glUseProgram(programs.object_hiz);
-  glUniform1i(glGetUniformLocation(programs.object_hiz,"matricesTex"),0);
-  if (dualindex){
-    glUniform1i(glGetUniformLocation(programs.object_frustum,"bboxesTex"),1);
-  }
-  glUniform1i(glGetUniformLocation(programs.object_hiz,"depthTex"),2);
-  m_uniforms.hiz_viewProj = glGetUniformLocation(programs.object_hiz, "viewProjTM");
-  
-  glUseProgram(programs.object_raster);
-  glUniform1i(glGetUniformLocation(programs.object_raster,"matricesTex"),0);
-  if (dualindex){
-    glUniform1i(glGetUniformLocation(programs.object_frustum,"bboxesTex"),1);
-  }
-  m_uniforms.raster_viewProj = glGetUniformLocation(programs.object_raster, "viewProjTM");
-  m_uniforms.raster_viewPos  = glGetUniformLocation(programs.object_raster, "viewPos");
-  m_uniforms.raster_viewDir  = glGetUniformLocation(programs.object_raster, "viewDir");
-
-  glUseProgram(0);
 }
 
 void CullingSystem::deinit()
@@ -129,8 +82,8 @@ void CullingSystem::buildDepthMipmaps( GLuint textureDepth, int width, int heigh
       theight = theight < 1 ? 1 : theight;
       glViewport(0,0,twidth,theight);
       glFramebufferTexture2D(GL_FRAMEBUFFER,GL_DEPTH_STENCIL_ATTACHMENT,GL_TEXTURE_2D, textureDepth, level);
-      glUniform1i(m_uniforms.depth_lod, level-1);
-      glUniform1i(m_uniforms.depth_even, wasEven);
+      glUniform1i(0, level-1);
+      glUniform1i(1, wasEven);
 
       glDrawArrays(GL_TRIANGLES,0,3);
     }
@@ -198,15 +151,9 @@ void CullingSystem::testBboxes( Job &job, bool raster )
     glColorMask(GL_FALSE,GL_FALSE,GL_FALSE,GL_FALSE);
 #endif
   }
-  else if (m_useSSBO){
+  else {
     glEnable(GL_RASTERIZER_DISCARD);
     job.m_bufferVisOutput.BindBufferRange(GL_SHADER_STORAGE_BUFFER,0);
-  }
-  else{
-    glEnable(GL_RASTERIZER_DISCARD);
-    // setup transform feedback
-    job.m_bufferVisOutput.BindBufferRange(GL_TRANSFORM_FEEDBACK_BUFFER,0);
-    glBeginTransformFeedback(GL_POINTS);
   }
 
   glDrawArrays(GL_POINTS,0,job.m_numObjects);
@@ -220,13 +167,8 @@ void CullingSystem::testBboxes( Job &job, bool raster )
     glColorMask(GL_TRUE,GL_TRUE,GL_TRUE,GL_TRUE);
 #endif
   }
-  else if (m_useSSBO){
+  else {
     glBindBufferBase(GL_SHADER_STORAGE_BUFFER,0,0);
-    glDisable(GL_RASTERIZER_DISCARD);
-  }
-  else{
-    glEndTransformFeedback();
-    glBindBufferBase(GL_TRANSFORM_FEEDBACK_BUFFER,0,0);
     glDisable(GL_RASTERIZER_DISCARD);
   }
 
@@ -270,25 +212,13 @@ void CullingSystem::bitsFromOutput( Job &job, BitType type)
     glEnableVertexAttribArray(9);
   }
 
-  if (m_useSSBO){
-    job.m_bufferVisBitsCurrent.BindBufferRange(GL_SHADER_STORAGE_BUFFER,0);
-    glMemoryBarrier(GL_VERTEX_ATTRIB_ARRAY_BARRIER_BIT);
-  }
-  else{
-    job.m_bufferVisBitsCurrent.BindBufferRange(GL_TRANSFORM_FEEDBACK_BUFFER,0);
-    glBeginTransformFeedback(GL_POINTS);
-  }
+  job.m_bufferVisBitsCurrent.BindBufferRange(GL_SHADER_STORAGE_BUFFER,0);
+  glMemoryBarrier(GL_VERTEX_ATTRIB_ARRAY_BARRIER_BIT);
 
   glDrawArrays(GL_POINTS,0, minDivide(job.m_numObjects,32));
 
-  if (m_useSSBO){
-    glBindBufferBase(GL_SHADER_STORAGE_BUFFER, 0, 0);
-    glBindBufferBase(GL_SHADER_STORAGE_BUFFER, 1, 0);
-  }
-  else{
-    glEndTransformFeedback();
-    glBindBufferBase(GL_TRANSFORM_FEEDBACK_BUFFER, 0, 0);
-  }
+  glBindBufferBase(GL_SHADER_STORAGE_BUFFER, 0, 0);
+  glBindBufferBase(GL_SHADER_STORAGE_BUFFER, 1, 0);
   
   glDisableVertexAttribArray(9);
   for (int i = 0; i < 8; i++){
@@ -311,11 +241,13 @@ void CullingSystem::resultClient(Job &job)
 
 void CullingSystem::buildOutput( MethodType method, Job &job, const View& view )
 {
+  glBindBufferBase(GL_UNIFORM_BUFFER, 0, m_ubo);
+  glBufferSubData(GL_UNIFORM_BUFFER, 0, sizeof(View), &view);
+
   switch(method){
   case METHOD_FRUSTUM:
     {
       glUseProgram(m_programs.object_frustum);
-      glUniformMatrix4fv(m_uniforms.frustum_viewProj, 1 ,GL_FALSE, view.viewProjMatrix);
       
       testBboxes(job,false);
     }
@@ -323,7 +255,6 @@ void CullingSystem::buildOutput( MethodType method, Job &job, const View& view )
   case METHOD_HIZ:
     {
       glUseProgram(m_programs.object_hiz);
-      glUniformMatrix4fv(m_uniforms.hiz_viewProj, 1, GL_FALSE, view.viewProjMatrix);
       glActiveTexture(GL_TEXTURE2);
       glBindTexture(GL_TEXTURE_2D,job.m_textureDepthWithMipmaps);
       
@@ -341,9 +272,6 @@ void CullingSystem::buildOutput( MethodType method, Job &job, const View& view )
       glClearBufferData(GL_SHADER_STORAGE_BUFFER, GL_R32UI,GL_RED_INTEGER,GL_UNSIGNED_INT,0);
 
       glUseProgram(m_programs.object_raster);
-      glUniformMatrix4fv(m_uniforms.raster_viewProj, 1, GL_FALSE, view.viewProjMatrix);
-      glUniform3fv(m_uniforms.raster_viewPos, 1, view.viewPos);
-      glUniform3fv(m_uniforms.raster_viewDir, 1, view.viewDir);
       
       glEnable( GL_POLYGON_OFFSET_FILL );
       glPolygonOffset(-1,-1);
@@ -357,6 +285,8 @@ void CullingSystem::buildOutput( MethodType method, Job &job, const View& view )
     }
     break;
   }
+
+  glBindBufferBase(GL_UNIFORM_BUFFER, 0, 0);
 }
 
 

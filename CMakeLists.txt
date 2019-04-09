@@ -34,7 +34,6 @@ _add_project_definitions(${PROJNAME})
 # add files in PACKAGE_SOURCE_FILES
 #
 _add_package_OpenGL()
-#_add_package_NSight()
 _add_package_ImGUI()
 
 #####################################################################################
@@ -56,12 +55,9 @@ if(WIN32 AND NOT GLUT_FOUND)
   add_definitions(/wd4996) #remove printf warning
   add_definitions(/wd4244) #remove double to float conversion warning
   add_definitions(/wd4305) #remove double to float truncation warning
-  add_executable(${PROJNAME} WIN32 ${SOURCE_FILES} ${COMMON_SOURCE_FILES} ${PACKAGE_SOURCE_FILES} ${GLSL_FILES})
-else()
-  add_executable(${PROJNAME} ${SOURCE_FILES} ${COMMON_SOURCE_FILES} ${PACKAGE_SOURCE_FILES} ${GLSL_FILES})
 endif()
 
-_set_subsystem_console(${PROJNAME})
+add_executable(${PROJNAME} ${SOURCE_FILES} ${COMMON_SOURCE_FILES} ${PACKAGE_SOURCE_FILES} ${GLSL_FILES})
 
 #####################################################################################
 # common source code needed for this sample
@@ -69,6 +65,9 @@ _set_subsystem_console(${PROJNAME})
 source_group(common FILES 
   ${COMMON_SOURCE_FILES}
   ${PACKAGE_SOURCE_FILES}
+)
+source_group(sources FILES 
+  ${SOURCE_FILES}
 )
 source_group(shaders FILES 
   ${GLSL_FILES}

@@ -30,7 +30,7 @@
 #define CULLINGSYSTEM_H__
 
 #include <stdint.h>
-#include <nv_helpers_gl/extensions_gl.hpp>
+#include <nvgl/extensions_gl.hpp>
 
 
 class CullingSystem {
@@ -181,9 +181,19 @@ public:
   };
   
   struct View {
-    const float*  viewProjMatrix;
-    const float*  viewDir;
-    const float*  viewPos;
+    // std140 padding
+    float  viewProjMatrix[16];
+
+    float  viewDir[3];
+    float  _pad0;
+
+    float  viewPos[3];
+    float  _pad1;
+
+    float  viewWidth;
+    float  viewHeight;
+    float  viewCullThreshold;
+    float  _pad2;
   };
   
   void init( const Programs &programs, bool dualindex );
@@ -205,24 +215,14 @@ public:
 
 private:
 
-  struct Uniforms {
-    GLint   depth_lod;
-    GLint   depth_even;
-    GLint   frustum_viewProj;
-    GLint   hiz_viewProj;
-    GLint   raster_viewProj;
-    GLint   raster_viewDir;
-    GLint   raster_viewPos;
-  };
-
   void testBboxes( Job &job, bool raster);
   
   Programs  m_programs;
-  Uniforms  m_uniforms;
+
+  GLuint    m_ubo;
   GLuint    m_fbo;
   GLuint    m_tbo[2];
   bool      m_dualindex;
-  bool      m_useSSBO;
   bool      m_useRepesentativeTest;
 };
 

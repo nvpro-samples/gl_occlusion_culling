@@ -26,7 +26,7 @@
  */
 
 
-#version 330
+#version 430
 /**/
 
 #define TEMPORAL_LAST 1
@@ -36,33 +36,15 @@
 #define TEMPORAL 0
 #endif
 
-#extension GL_ARB_explicit_attrib_location : require
-#extension GL_ARB_shader_storage_buffer_object : enable
-
 layout(location=0) in uvec4 instream[8];
 
 #if TEMPORAL
 layout(location=9) in uint last;
 #endif
 
-#if GL_ARB_shader_storage_buffer_object
 layout(std430,binding=0)  writeonly buffer outputBuffer {
   uint outstream[];
 };
-
-void storeOutput(uint value)
-{
-  outstream[gl_VertexID] = value;
-}
-
-#else
-flat out uint outstream;
-
-void storeOutput(uint value)
-{
-  outstream= value;
-}
-#endif
 
 void main ()
 {
@@ -83,5 +65,5 @@ void main ()
   bits &= (~last);
 #endif
 
-  storeOutput(bits);
+  outstream[gl_VertexID] = bits;
 }

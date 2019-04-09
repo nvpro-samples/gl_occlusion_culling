@@ -30,7 +30,7 @@
 #ifndef SCANSYSTEM_H__
 #define SCANSYSTEM_H__
 
-#include <nv_helpers_gl/extensions_gl.hpp>
+#include <nvgl/extensions_gl.hpp>
 
 class ScanSystem {
 public:

@@ -27,23 +27,23 @@
 
 #define DEBUG_FILTER     1
 
-#include <nv_helpers_gl/extensions_gl.hpp>
+#include <nvgl/extensions_gl.hpp>
 
 #include <imgui/imgui_helper.h>
 #include <imgui/imgui_impl_gl.h>
 
-#include <nv_math/nv_math_glsltypes.h>
+#include <nvmath/nvmath_glsltypes.h>
 
-#include <nv_helpers/geometry.hpp>
-#include <nv_helpers/misc.hpp>
-#include <nv_helpers/cameracontrol.hpp>
+#include <nvh/geometry.hpp>
+#include <nvh/misc.hpp>
+#include <nvh/cameracontrol.hpp>
 
-#include <nv_helpers_gl/appwindowprofiler_gl.hpp>
-#include <nv_helpers_gl/error_gl.hpp>
-#include <nv_helpers_gl/programmanager_gl.hpp>
-#include <nv_helpers_gl/base_gl.hpp>
+#include <nvgl/appwindowprofiler_gl.hpp>
+#include <nvgl/error_gl.hpp>
+#include <nvgl/programmanager_gl.hpp>
+#include <nvgl/base_gl.hpp>
 
-#include <nv_helpers/tnulled.hpp>
+#include <nvh/tnulled.hpp>
 
 #include <vector>
 
@@ -55,9 +55,9 @@ using namespace nvtoken;
 
 #include "scansystem.hpp"
 
-using namespace nv_helpers;
-using namespace nv_helpers_gl;
-using namespace nv_math;
+using namespace nvh;
+using namespace nvgl;
+using namespace nvmath;
 
 #include "common.h"
 
@@ -68,15 +68,16 @@ namespace ocull
   int const SAMPLE_MAJOR_VERSION(4);
   int const SAMPLE_MINOR_VERSION(5);
 
-  static const GLenum    fboFormat = GL_RGBA16F;
+  static const GLenum     fboFormat = GL_RGBA16F;
   static const int        grid = 26;
   static const float      globalscale = 8;
 
   static ScanSystem       s_scanSys;
 
-  class Sample : public nv_helpers_gl::AppWindowProfilerGL
+  class Sample : public nvgl::AppWindowProfilerGL
   {
-    static const int CYCLIC_FRAMES = 2;
+  public:
+    static int const CYCLIC_FRAMES = 2;
 
     enum GuiEnums {
       GUI_ALGORITHM,
@@ -119,12 +120,12 @@ namespace ocull
     } programs;
 
     struct {
-      nv_helpers::TNulled<GLuint>
+      nvh::TNulled<GLuint>
         scene;
     } fbos;
 
     struct {
-      nv_helpers::TNulled<GLuint>
+      nvh::TNulled<GLuint>
         scene_ubo,
         scene_vbo,
         scene_ibo,
@@ -163,7 +164,7 @@ namespace ocull
     } addresses;
 
     struct {
-      nv_helpers::TNulled<GLuint>
+      nvh::TNulled<GLuint>
         scene_color,
         scene_depthstencil,
         scene_matrices;
@@ -178,8 +179,8 @@ namespace ocull
     };
 
     struct CullBbox {
-      nv_math::vec4  min;
-      nv_math::vec4  max;
+      nvmath::vec4  min;
+      nvmath::vec4  max;
     };
 
     struct Geometry {
@@ -192,12 +193,12 @@ namespace ocull
       Vertex(const geometry::Vertex& vertex){
         position  = vertex.position;
         normal    = vertex.normal;
-        color     = nv_math::vec4(1.0f);
+        color     = nvmath::vec4(1.0f);
       }
 
-      nv_math::vec4   position;
-      nv_math::vec4   normal;
-      nv_math::vec4   color;
+      nvmath::vec4   position;
+      nvmath::vec4   normal;
+      nvmath::vec4   color;
     };
 
     class CullJobToken : public CullingSystem::Job
@@ -234,13 +235,15 @@ namespace ocull
     };
 
     struct Tweak {
-      CullingSystem::MethodType method = CullingSystem::METHOD_RASTER;
-      ResultType                result = RESULT_REGULAR_CURRENT;
-      DrawModes                 drawmode = DRAW_STANDARD;
-      bool      culling = false;
-      bool      freeze = false;
-      float     animate = 0;
-
+      CullingSystem::MethodType method        = CullingSystem::METHOD_RASTER;
+      ResultType                result        = RESULT_REGULAR_CURRENT;
+      DrawModes                 drawmode      = DRAW_STANDARD;
+      bool                      culling       = false;
+      bool                      freeze        = false;
+      float                     minPixelSize  = 0.0f;
+      float                     animate       = 0;
+      float                     animateOffset = 0;
+      bool                      noui          = false;
     };
 
     ProgramManager  m_progManager;
@@ -256,8 +259,8 @@ namespace ocull
 
     std::vector<uint32_t>       m_sceneVisBits;
     std::vector<DrawCmd>        m_sceneCmds;
-    std::vector<nv_math::mat4f> m_sceneMatrices;
-    std::vector<nv_math::mat4f> m_sceneMatricesAnimated;
+    std::vector<nvmath::mat4f> m_sceneMatrices;
+    std::vector<nvmath::mat4f> m_sceneMatricesAnimated;
 
     GLuint                      m_numTokens;
     std::string                 m_tokenStream;
@@ -301,7 +304,7 @@ namespace ocull
     void end() {
       ImGui::ShutdownGL();
     }
-    // return true to prevent m_window updates
+    // return true to prevent m_windowState updates
     bool mouse_pos(int x, int y) {
       return ImGuiH::mouse_pos(x, y);
     }
@@ -318,6 +321,16 @@ namespace ocull
       return ImGuiH::key_button(button, action, mods);
     }
 
+    Sample() {
+      m_parameterList.add("method", (int32_t*)&m_tweak.method);
+      m_parameterList.add("drawmode", (int32_t*)&m_tweak.drawmode);
+      m_parameterList.add("result", (int32_t*)&m_tweak.result);
+      m_parameterList.add("animate", &m_tweak.animate);
+      m_parameterList.add("culling", &m_tweak.culling);
+      m_parameterList.add("noui", &m_tweak.noui, true);
+      m_parameterList.add("minpixelsize", &m_tweak.minPixelSize);
+      m_parameterList.add("animateoffset", &m_tweak.animateOffset);
+    }
   };
 
   bool Sample::initProgram()
@@ -341,10 +354,10 @@ namespace ocull
       ProgramManager::Definition(GL_FRAGMENT_SHADER, "cull-raster.frag.glsl"));
 
     programs.object_frustum = m_progManager.createProgram(
-      ProgramManager::Definition(GL_VERTEX_SHADER,  "cull-xfb.vert.glsl"));
+      ProgramManager::Definition(GL_VERTEX_SHADER,  "cull-basic.vert.glsl"));
 
     programs.object_hiz = m_progManager.createProgram(
-      ProgramManager::Definition(GL_VERTEX_SHADER,  "#define OCCLUSION\n", "cull-xfb.vert.glsl"));
+      ProgramManager::Definition(GL_VERTEX_SHADER,  "#define OCCLUSION\n", "cull-basic.vert.glsl"));
 
     programs.bit_regular = m_progManager.createProgram(
       ProgramManager::Definition(GL_VERTEX_SHADER,  "#define TEMPORAL 0\n", "cull-bitpack.vert.glsl"));
@@ -361,16 +374,16 @@ namespace ocull
       ProgramManager::Definition(GL_FRAGMENT_SHADER, "cull-downsample.frag.glsl"));
 
     programs.token_sizes = m_progManager.createProgram(
-      nv_helpers_gl::ProgramManager::Definition(GL_VERTEX_SHADER, "cull-tokensizes.vert.glsl"));
+      nvgl::ProgramManager::Definition(GL_VERTEX_SHADER, "cull-tokensizes.vert.glsl"));
     programs.token_cmds = m_progManager.createProgram(
-      nv_helpers_gl::ProgramManager::Definition(GL_VERTEX_SHADER, "cull-tokencmds.vert.glsl"));
+      nvgl::ProgramManager::Definition(GL_VERTEX_SHADER, "cull-tokencmds.vert.glsl"));
 
     programs.scan_prefixsum = m_progManager.createProgram(
-      nv_helpers_gl::ProgramManager::Definition(GL_COMPUTE_SHADER,  "#define TASK TASK_SUM\n", "scan.comp.glsl"));
+      nvgl::ProgramManager::Definition(GL_COMPUTE_SHADER,  "#define TASK TASK_SUM\n", "scan.comp.glsl"));
     programs.scan_offsets = m_progManager.createProgram(
-      nv_helpers_gl::ProgramManager::Definition(GL_COMPUTE_SHADER,  "#define TASK TASK_OFFSETS\n", "scan.comp.glsl"));
+      nvgl::ProgramManager::Definition(GL_COMPUTE_SHADER,  "#define TASK TASK_OFFSETS\n", "scan.comp.glsl"));
     programs.scan_combine = m_progManager.createProgram(
-      nv_helpers_gl::ProgramManager::Definition(GL_COMPUTE_SHADER,  "#define TASK TASK_COMBINE\n", "scan.comp.glsl"));
+      nvgl::ProgramManager::Definition(GL_COMPUTE_SHADER,  "#define TASK TASK_COMBINE\n", "scan.comp.glsl"));
 
     validated = m_progManager.areProgramsValid();
 
@@ -473,7 +486,7 @@ namespace ocull
         pos /=  float(grid);
 
         float scale;
-        if ( nv_math::length(pos) < 0.52f ){
+        if ( nvmath::length(pos) < 0.52f ){
           scale = globalscale * 0.35f;
           pos *=  globalscale * 0.5f;
         }
@@ -483,12 +496,12 @@ namespace ocull
         }
 
         mat4 matrix = 
-          nv_math::translation_mat4( pos) *
-          nv_math::rotation_mat4_y(frand()*nv_pi) *
-          nv_math::scale_mat4( (vec3(scale) * (vec3(0.25f) + vec3(frand(),frand(),frand())*0.5f ))/float(grid) );
+          nvmath::translation_mat4( pos) *
+          nvmath::rotation_mat4_y(frand()*nv_pi) *
+          nvmath::scale_mat4( (vec3(scale) * (vec3(0.25f) + vec3(frand(),frand(),frand())*0.5f ))/float(grid) );
 
         m_sceneMatrices.push_back(matrix);
-        m_sceneMatrices.push_back(nv_math::transpose(nv_math::invert(matrix)));
+        m_sceneMatrices.push_back(nvmath::transpose(nvmath::invert(matrix)));
         matrixIndex.push_back(obj);
 
         // all have same bbox
@@ -735,8 +748,8 @@ namespace ocull
   bool Sample::begin()
   {
     m_statsPrint = false;
-
-    ImGuiH::Init(m_window.m_viewsize[0], m_window.m_viewsize[1], this);
+    
+    ImGuiH::Init(m_windowState.m_viewSize[0], m_windowState.m_viewSize[1], this);
     ImGui::InitGL();
 
     glPixelStorei(GL_UNPACK_ALIGNMENT, 1);
@@ -756,7 +769,7 @@ namespace ocull
 
     validated = validated && initProgram();
     validated = validated && initScene();
-    validated = validated && initFramebuffers(m_window.m_viewsize[0],m_window.m_viewsize[1]);
+    validated = validated && initFramebuffers(m_windowState.m_viewSize[0],m_windowState.m_viewSize[1]);
 
     if (!validated) return false;
 
@@ -836,7 +849,7 @@ namespace ocull
     m_control.m_sceneOrbit = vec3(0.0f);
     m_control.m_sceneDimension = float(globalscale) * 2.0f;
     float dist = m_control.m_sceneDimension * 0.75f;
-    m_control.m_viewMatrix = nv_math::look_at(m_control.m_sceneOrbit - normalize(vec3(1,0,-1))*dist, m_control.m_sceneOrbit, vec3(0,1,0));
+    m_control.m_viewMatrix = nvmath::look_at(m_control.m_sceneOrbit - normalize(vec3(1,0,-1))*dist, m_control.m_sceneOrbit, vec3(0,1,0));
 
     m_statsTime = NVPWindow::sysGetTime();
 
@@ -845,8 +858,8 @@ namespace ocull
 
   void Sample::processUI(double time)
   {
-    int width = m_window.m_viewsize[0];
-    int height = m_window.m_viewsize[1];
+    int width = m_windowState.m_viewSize[0];
+    int height = m_windowState.m_viewSize[1];
 
     // Update imgui configuration
     auto &imgui_io = ImGui::GetIO();
@@ -858,12 +871,13 @@ namespace ocull
     ImGui::NewFrame();
     ImGui::SetNextWindowSize(ImVec2(350, 0), ImGuiCond_FirstUseEver);
     if (ImGui::Begin("NVIDIA " PROJECT_NAME, nullptr)) {
-      ImGui::SliderFloat("animate", &m_tweak.animate, 0.0f, 32.0f);
       ImGui::Checkbox("culling", &m_tweak.culling);
       ImGui::Checkbox("freeze result", &m_tweak.freeze);
+      ImGui::SliderFloat("min.pixelsize", &m_tweak.minPixelSize, 0.0f, 16.0f);
       m_ui.enumCombobox(GUI_ALGORITHM, "algorithm", &m_tweak.method);
       m_ui.enumCombobox(GUI_RESULT, "result", &m_tweak.result);
       m_ui.enumCombobox(GUI_DRAW, "drawmode", &m_tweak.drawmode);
+      ImGui::SliderFloat("animate", &m_tweak.animate, 0.0f, 32.0f);
     }
     ImGui::End();
   }
@@ -953,7 +967,7 @@ namespace ocull
     glBindBuffer(GL_COPY_WRITE_BUFFER, buffers.cull_bitsLast);
     glClearBufferData(GL_COPY_WRITE_BUFFER, GL_R32UI, GL_RED_INTEGER, GL_UNSIGNED_INT, NULL);
     // current are all visible
-    memset(m_sceneVisBits.data(),0xFFFFFFFF,sizeof(int) * m_sceneVisBits.size() );
+    memset(m_sceneVisBits.data(),0xFFFFFFFF,sizeof(uint32_t) * m_sceneVisBits.size() );
     // rest token buffer
     glCopyNamedBufferSubData(buffers.scene_token, buffers.cull_token, 0, 0, m_tokenStream.size());
     glCopyNamedBufferSubData(buffers.scene_token, buffers.cull_tokenEmulation, 0, 0, m_tokenStream.size());
@@ -963,7 +977,7 @@ namespace ocull
 
   void Sample::drawScene(bool depthonly, const char* what)
   {
-    NV_PROFILE_SECTION(what);
+    NV_PROFILE_GL_SECTION(what);
 
     if (depthonly){
       glColorMask(GL_FALSE,GL_FALSE,GL_FALSE,GL_FALSE);
@@ -1018,14 +1032,14 @@ namespace ocull
       }
       if (m_tweak.culling){
         if (m_tweak.drawmode == DRAW_TOKENBUFFER_EMULATION){
-          NV_PROFILE_SECTION("Read");
+          NV_PROFILE_GL_SECTION("Read");
           m_cullJobToken.tokenOut.GetNamedBufferSubData(&m_tokenStreamCulled[0]);
         }
         else{
           glMemoryBarrier(GL_COMMAND_BARRIER_BIT);
         }
 
-        NV_PROFILE_SPLIT();
+        NV_PROFILE_GL_SPLIT();
       }
 
       GLintptr offset = 0;
@@ -1089,16 +1103,19 @@ namespace ocull
   void Sample::drawCullingTemporal(CullingSystem::Job& cullJob)
   {
     CullingSystem::View view;
-    view.viewPos = m_sceneUbo.viewPos.get_value();
-    view.viewDir = m_sceneUbo.viewDir.get_value();
-    view.viewProjMatrix = m_sceneUbo.viewProjMatrix.get_value();
+    view.viewWidth         = float(m_windowState.m_viewSize[0]);
+    view.viewHeight        = float(m_windowState.m_viewSize[1]);
+    view.viewCullThreshold = m_tweak.minPixelSize;
+    memcpy(view.viewPos, m_sceneUbo.viewPos.get_value(), sizeof(view.viewPos));
+    memcpy(view.viewDir, m_sceneUbo.viewDir.get_value(), sizeof(view.viewDir));
+    memcpy(view.viewProjMatrix, m_sceneUbo.viewProjMatrix.get_value(), sizeof(view.viewProjMatrix));
 
     switch(m_tweak.method){
     case CullingSystem::METHOD_FRUSTUM:
     {
       // kinda pointless to use temporal ;)
       {
-        NV_PROFILE_SECTION("CullF");
+        NV_PROFILE_GL_SECTION("CullF");
         m_cullSys.buildOutput( m_tweak.method, cullJob, view );
         m_cullSys.bitsFromOutput( cullJob, CullingSystem::BITS_CURRENT );
         m_cullSys.resultFromBits( cullJob );
@@ -1111,7 +1128,7 @@ namespace ocull
     case CullingSystem::METHOD_HIZ:
     {
       {
-        NV_PROFILE_SECTION("CullF");
+        NV_PROFILE_GL_SECTION("CullF");
 #if !CULL_TEMPORAL_NOFRUSTUM
         m_cullSys.buildOutput( CullingSystem::METHOD_FRUSTUM, cullJob, view );
         m_cullSys.bitsFromOutput( cullJob, CullingSystem::BITS_CURRENT_AND_LAST );
@@ -1123,10 +1140,10 @@ namespace ocull
       drawScene(false,"Last");
 
       // changes FBO binding
-      m_cullSys.buildDepthMipmaps( textures.scene_depthstencil, m_window.m_viewsize[0], m_window.m_viewsize[1]);
+      m_cullSys.buildDepthMipmaps( textures.scene_depthstencil, m_windowState.m_viewSize[0], m_windowState.m_viewSize[1]);
 
       {
-        NV_PROFILE_SECTION("CullH");
+        NV_PROFILE_GL_SECTION("CullH");
         m_cullSys.buildOutput( CullingSystem::METHOD_HIZ, cullJob, view );
 
         m_cullSys.bitsFromOutput( cullJob, CullingSystem::BITS_CURRENT_AND_NOT_LAST );
@@ -1149,7 +1166,7 @@ namespace ocull
     case CullingSystem::METHOD_RASTER:
     {
       {
-        NV_PROFILE_SECTION("CullF");
+        NV_PROFILE_GL_SECTION("CullF");
 #if !CULL_TEMPORAL_NOFRUSTUM
         m_cullSys.buildOutput( CullingSystem::METHOD_FRUSTUM, cullJob, view );
         m_cullSys.bitsFromOutput( cullJob, CullingSystem::BITS_CURRENT_AND_LAST );
@@ -1161,7 +1178,7 @@ namespace ocull
       drawScene(false,"Last");
 
       {
-        NV_PROFILE_SECTION("CullR");
+        NV_PROFILE_GL_SECTION("CullR");
         m_cullSys.buildOutput( CullingSystem::METHOD_RASTER, cullJob, view );
         m_cullSys.bitsFromOutput( cullJob, CullingSystem::BITS_CURRENT_AND_NOT_LAST );
         m_cullSys.resultFromBits( cullJob );
@@ -1184,15 +1201,18 @@ namespace ocull
   void Sample::drawCullingRegular(CullingSystem::Job& cullJob)
   {
     CullingSystem::View view;
-    view.viewPos = m_sceneUbo.viewPos.get_value();
-    view.viewDir = m_sceneUbo.viewDir.get_value();
-    view.viewProjMatrix = m_sceneUbo.viewProjMatrix.get_value();
+    view.viewWidth         = float(m_windowState.m_viewSize[0]);
+    view.viewHeight        = float(m_windowState.m_viewSize[1]);
+    view.viewCullThreshold = m_tweak.minPixelSize;
+    memcpy(view.viewPos, m_sceneUbo.viewPos.get_value(), sizeof(view.viewPos));
+    memcpy(view.viewDir, m_sceneUbo.viewDir.get_value(), sizeof(view.viewDir));
+    memcpy(view.viewProjMatrix, m_sceneUbo.viewProjMatrix.get_value(), sizeof(view.viewProjMatrix));
 
     switch(m_tweak.method){
     case CullingSystem::METHOD_FRUSTUM:
       {
         {
-          NV_PROFILE_SECTION("CullF");
+          NV_PROFILE_GL_SECTION("CullF");
           m_cullSys.buildOutput( m_tweak.method, cullJob, view );
           m_cullSys.bitsFromOutput( cullJob, CullingSystem::BITS_CURRENT );
           m_cullSys.resultFromBits( cullJob );
@@ -1205,7 +1225,7 @@ namespace ocull
     case CullingSystem::METHOD_HIZ:
       {
         {
-          NV_PROFILE_SECTION("CullF");
+          NV_PROFILE_GL_SECTION("CullF");
           m_cullSys.buildOutput( CullingSystem::METHOD_FRUSTUM, cullJob, view );
           m_cullSys.bitsFromOutput( cullJob, CullingSystem::BITS_CURRENT );
           m_cullSys.resultFromBits( cullJob );
@@ -1215,14 +1235,14 @@ namespace ocull
         drawScene(true,"Depth");
 
         {
-          NV_PROFILE_SECTION("Mip");
+          NV_PROFILE_GL_SECTION("Mip");
           // changes FBO binding
-          m_cullSys.buildDepthMipmaps( textures.scene_depthstencil, m_window.m_viewsize[0], m_window.m_viewsize[1]);
+          m_cullSys.buildDepthMipmaps( textures.scene_depthstencil, m_windowState.m_viewSize[0], m_windowState.m_viewSize[1]);
         }
 
 
         {
-          NV_PROFILE_SECTION("CullH");
+          NV_PROFILE_GL_SECTION("CullH");
           m_cullSys.buildOutput( CullingSystem::METHOD_HIZ, cullJob, view );
           m_cullSys.bitsFromOutput( cullJob, CullingSystem::BITS_CURRENT );
           m_cullSys.resultFromBits( cullJob );
@@ -1236,7 +1256,7 @@ namespace ocull
     case CullingSystem::METHOD_RASTER:
       {
         {
-          NV_PROFILE_SECTION("CullF");
+          NV_PROFILE_GL_SECTION("CullF");
           m_cullSys.buildOutput( CullingSystem::METHOD_FRUSTUM, cullJob, view );
           m_cullSys.bitsFromOutput( cullJob, CullingSystem::BITS_CURRENT );
           m_cullSys.resultFromBits( cullJob );
@@ -1247,7 +1267,7 @@ namespace ocull
         
 
         {
-          NV_PROFILE_SECTION("CullR");
+          NV_PROFILE_GL_SECTION("CullR");
           m_cullSys.buildOutput( CullingSystem::METHOD_RASTER, cullJob, view );
           m_cullSys.bitsFromOutput( cullJob, CullingSystem::BITS_CURRENT );
           m_cullSys.resultFromBits( cullJob );
@@ -1263,22 +1283,25 @@ namespace ocull
   void Sample::drawCullingRegularLastFrame(CullingSystem::Job& cullJob)
   {
     CullingSystem::View view;
-    view.viewPos = m_sceneUbo.viewPos.get_value();
-    view.viewDir = m_sceneUbo.viewDir.get_value();
-    view.viewProjMatrix = m_sceneUbo.viewProjMatrix.get_value();
+    view.viewWidth         = float(m_windowState.m_viewSize[0]);
+    view.viewHeight        = float(m_windowState.m_viewSize[1]);
+    view.viewCullThreshold = m_tweak.minPixelSize;
+    memcpy(view.viewPos, m_sceneUbo.viewPos.get_value(), sizeof(view.viewPos));
+    memcpy(view.viewDir, m_sceneUbo.viewDir.get_value(), sizeof(view.viewDir));
+    memcpy(view.viewProjMatrix, m_sceneUbo.viewProjMatrix.get_value(), sizeof(view.viewProjMatrix));
 
     switch(m_tweak.method){
     case CullingSystem::METHOD_FRUSTUM:
     {
       {
-        NV_PROFILE_SECTION("Wait");
+        NV_PROFILE_GL_SECTION("Wait");
         m_cullSys.resultClient(cullJob);
       }
 
       drawScene(false,"Scene");
 
       {
-        NV_PROFILE_SECTION("CullF");
+        NV_PROFILE_GL_SECTION("CullF");
         m_cullSys.buildOutput( CullingSystem::METHOD_FRUSTUM, cullJob, view );
         m_cullSys.bitsFromOutput( cullJob, CullingSystem::BITS_CURRENT );
         m_cullSys.resultFromBits( cullJob );
@@ -1289,20 +1312,20 @@ namespace ocull
     {
 
       {
-        NV_PROFILE_SECTION("Wait");
+        NV_PROFILE_GL_SECTION("Wait");
         m_cullSys.resultClient(cullJob);
       }
 
       drawScene(false,"Scene");
 
       {
-        NV_PROFILE_SECTION("Mip");
+        NV_PROFILE_GL_SECTION("Mip");
         // changes FBO binding
-        m_cullSys.buildDepthMipmaps( textures.scene_depthstencil, m_window.m_viewsize[0], m_window.m_viewsize[1]);
+        m_cullSys.buildDepthMipmaps( textures.scene_depthstencil, m_windowState.m_viewSize[0], m_windowState.m_viewSize[1]);
       }
 
       {
-        NV_PROFILE_SECTION("Cull");
+        NV_PROFILE_GL_SECTION("Cull");
         m_cullSys.buildOutput( CullingSystem::METHOD_HIZ, cullJob, view );
         m_cullSys.bitsFromOutput( cullJob, CullingSystem::BITS_CURRENT );
         m_cullSys.resultFromBits( cullJob );
@@ -1312,14 +1335,14 @@ namespace ocull
     case CullingSystem::METHOD_RASTER:
     {
       {
-        NV_PROFILE_SECTION("Wait");
+        NV_PROFILE_GL_SECTION("Wait");
         m_cullSys.resultClient( cullJob );
       }
 
       drawScene(false,"Scene");
       
       {
-        NV_PROFILE_SECTION("Cull");
+        NV_PROFILE_GL_SECTION("Cull");
         m_cullSys.buildOutput( CullingSystem::METHOD_RASTER, cullJob, view );
         m_cullSys.bitsFromOutput( cullJob, CullingSystem::BITS_CURRENT );
         m_cullSys.resultFromBits( cullJob );
@@ -1331,13 +1354,15 @@ namespace ocull
 
   void Sample::think(double time)
   {
+    NV_PROFILE_GL_SECTION("Frame");
+
     processUI(time);
 
-    m_control.processActions(m_window.m_viewsize,
-      nv_math::vec2f(m_window.m_mouseCurrent[0],m_window.m_mouseCurrent[1]),
-      m_window.m_mouseButtonFlags, m_window.m_wheel);
+    m_control.processActions(m_windowState.m_viewSize,
+      nvmath::vec2f(m_windowState.m_mouseCurrent[0],m_windowState.m_mouseCurrent[1]),
+      m_windowState.m_mouseButtonFlags, m_windowState.m_mouseWheel);
 
-    if (m_window.onPress(KEY_R)){
+    if (m_windowState.onPress(KEY_R)){
       m_progManager.reloadPrograms();
 
       ScanSystem::Programs scanprograms;
@@ -1388,8 +1413,8 @@ namespace ocull
       m_statsPrint = false;
     }
 
-    int width   = m_window.m_viewsize[0];
-    int height  = m_window.m_viewsize[1];
+    int width   = m_windowState.m_viewSize[0];
+    int height  = m_windowState.m_viewSize[1];
 
     {
       glBindFramebuffer(GL_FRAMEBUFFER, fbos.scene);
@@ -1401,12 +1426,12 @@ namespace ocull
 
 
       { // Update UBO
-        nv_math::mat4 projection = nv_math::perspective((45.f), float(width)/float(height), 0.1f, 100.0f);
-        nv_math::mat4 view = m_control.m_viewMatrix;
+        nvmath::mat4 projection = nvmath::perspective((45.f), float(width)/float(height), 0.1f, 100.0f);
+        nvmath::mat4 view = m_control.m_viewMatrix;
 
         m_sceneUbo.viewProjMatrix = projection * view;
         m_sceneUbo.viewMatrix = view;
-        m_sceneUbo.viewMatrixIT = nv_math::transpose(nv_math::invert(view));
+        m_sceneUbo.viewMatrixIT = nvmath::transpose(nvmath::invert(view));
 
         m_sceneUbo.viewPos = m_sceneUbo.viewMatrixIT.row(3);
         m_sceneUbo.viewDir = -view.row(2);
@@ -1417,14 +1442,14 @@ namespace ocull
 
     }
 
-    if (m_tweak.animate)
+    if (m_tweak.animate || m_tweak.animateOffset != m_tweakLast.animateOffset)
     {
-      mat4 rotator = nv_math::rotation_mat4_y( float(time)*0.1f * m_tweak.animate);
+      mat4 rotator = nvmath::rotation_mat4_y( float(time)*0.1f * m_tweak.animate + m_tweak.animateOffset);
 
       for (size_t i = 0; i < m_sceneMatrices.size()/2; i++){
         mat4 changed = rotator * m_sceneMatrices[i*2 + 0];
         m_sceneMatricesAnimated[i*2 + 0] = changed;
-        m_sceneMatricesAnimated[i*2 + 1] = nv_math::transpose(nv_math::invert(changed));
+        m_sceneMatricesAnimated[i*2 + 1] = nvmath::transpose(nvmath::invert(changed));
       }
 
       glNamedBufferSubData(buffers.scene_matrices,0,sizeof(mat4)*m_sceneMatricesAnimated.size(), m_sceneMatricesAnimated.data() );
@@ -1489,8 +1514,9 @@ namespace ocull
 
     m_tweakLast = m_tweak;
 
+    if (!m_tweak.noui)
     {
-      NV_PROFILE_SECTION("GUI");
+      NV_PROFILE_GL_SECTION("GUI");
       ImGui::Render();
       ImGui::RenderDrawDataGL(ImGui::GetDrawData());
     }
@@ -1502,24 +1528,19 @@ namespace ocull
   {
     initFramebuffers(width,height);
   }
-
+  
 }
 
 using namespace ocull;
 
-int sample_main(int argc, const char** argv)
+int main(int argc, const char** argv)
 {
-  SETLOGFILENAME();
+  NVPWindow::System system(argv[0], PROJECT_NAME);
+
   Sample sample;
   return sample.run(
     PROJECT_NAME,
     argc, argv,
-    SAMPLE_SIZE_WIDTH, SAMPLE_SIZE_HEIGHT,
-    SAMPLE_MAJOR_VERSION, SAMPLE_MINOR_VERSION);
-}
-
-void sample_print(int level, const char * fmt)
-{
-
+    SAMPLE_SIZE_WIDTH, SAMPLE_SIZE_HEIGHT);
 }
 
