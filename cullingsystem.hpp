@@ -34,6 +34,27 @@
 
 
 class CullingSystem {
+
+  /*
+    This class wraps several operations to aid implementing scalable occlusion culling.
+    Traditional techniques using "conditional rendering" or classic "occlusion queries",
+    often suffered from performance issues when applied to many thousands of objects.
+    See readme of "https://github.com/nvpro-samples/gl_occlusion_culling"
+
+    In this system here we do the occlusion test of many bounding boxes with a single drawcall.
+    The results for all of those boxes are stored in buffers that are packed
+    into bit buffers (one bit per tested object). The result of the occlusion test
+    can then either be read back or kept on the GPU to build draw indirect drawcalls.
+
+    The system does not make any allocations, except for a small UBO used to pass
+    uniforms to the shaders used.
+
+    As user you provide all necessary data as buffers in the "Job" class.
+    You can derive from this class to implement your own result handling,
+    although a few basic implementations are provided already.
+  */
+
+
 public:
   struct Programs {
     GLuint  object_frustum;
@@ -47,9 +68,9 @@ public:
   };
 
   enum MethodType {
-    METHOD_FRUSTUM,
-    METHOD_HIZ,
-    METHOD_RASTER,
+    METHOD_FRUSTUM, // test boxes against frustum only
+    METHOD_HIZ,     // test boxes against hiz texture
+    METHOD_RASTER,  // test boxes against current dept-buffer of current fbo
     NUM_METHODS,
   };
 
@@ -196,18 +217,37 @@ public:
     float  _pad2;
   };
   
+  // provide the programs using your own loading mechanism
+  // internally tbo, fbo, ubos are generated
+  // dualindex - means shaders were built in dual index mode.
+  //             The app provides two indices per proxy bounding box,
+  //             one is the matrix index, the other is the bounding box index.
+  
   void init( const Programs &programs, bool dualindex );
   void deinit();
   void update( const Programs &programs, bool dualindex );
   
   // helper function for HiZ method, leaves fbo bound to 0
+  // uses internal fbo, naive non-optimized implementation
   void buildDepthMipmaps(GLuint textureDepth, int width, int height);
   
-  // assumes relevant fbo bound for raster method
+  // computes occlusion test for all bboxes provided in the job
+  // updates job.m_bufferVisOutput
+  // assumes appropriate fbo bound for raster method as it assumes intact depthbuffer
+  
   void buildOutput( MethodType  method, Job &job, const View& view );
 
+  // updates job.m_bufferVisBitsCurrent
+  // from output buffer (job.m_bufferVisOutput), filled in "buildOutput" as well as potentially
+  // using job.m_bufferVisBitsLast, depending on BitType.
   void bitsFromOutput ( Job &job, BitType type );
+
+  // result handling is implemented in the interface provided by the job.
+  // for example you could be building MDI commands
   void resultFromBits ( Job &job );
+
+  // result handling on the client is implemented in the interface provided by the job
+  // for example waiting for readbacks, or nothing
   void resultClient   ( Job &job );
 
   // swaps the Current/Last bit array (for temporal coherent techniques)
@@ -215,6 +255,7 @@ public:
 
 private:
 
+  // perform occlusion test for all bounding boxes provided in the job
   void testBboxes( Job &job, bool raster);
   
   Programs  m_programs;

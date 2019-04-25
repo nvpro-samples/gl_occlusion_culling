@@ -21,6 +21,8 @@
 #define PERSPECTIVE     1
 #endif
 
+const int CULL_SKIP_ID = ~0;
+
 //////////////////////////////////////////////
 
 layout(binding=0, std140) uniform viewBuffer {
@@ -58,7 +60,7 @@ flat out int objid;
 
 void main()
 {
-  if (IN[0].objid == ~0) return;
+  if (IN[0].objid == CULL_SKIP_ID) return;
 
   int  matindex = (IN[0].matrixIndex*MATRICES + MATRIX_WORLD)*4;
   mat4 worldTM = mat4(

@@ -13,6 +13,7 @@
 #define MATRICES        2
 #endif
 
+const int CULL_SKIP_ID = ~0;
 
 //////////////////////////////////////////////
 
@@ -119,7 +120,7 @@ void main()
   // side faces will be visible, must treat object as 
   // visible
   
-  int matindex = (matrixIndex*MATRICES + MATRIX_WORLD_IT)*4;
+  int matindex = (matrixIndex * MATRICES + MATRIX_WORLD_IT) * 4;
   mat4 worldInvTransTM = mat4(
     texelFetch(matricesTex,matindex + 0),
     texelFetch(matricesTex,matindex + 1),
@@ -131,15 +132,15 @@ void main()
   if (all(lessThan(abs(objPos),dim))){
     // inside bbox
     visibles[objid] = 1;
-    // skip rasterization
-    OUT.objid = ~0;
+    // skip rasterization of this box
+    OUT.objid = CULL_SKIP_ID;
   }
   else {
   #if 1
     // avoid loading data
     mat4 worldTM = inverse(transpose(worldInvTransTM));
   #else
-    int matindex2 = (matrixIndex*MATRICES + MATRIX_WORLD)*4;
+    int matindex2 = (matrixIndex * MATRICES + MATRIX_WORLD) * 4;
     mat4 worldTM = mat4(
       texelFetch(matricesTex,matindex + 0),
       texelFetch(matricesTex,matindex + 1),
@@ -165,8 +166,8 @@ void main()
     if (clipbits != 0 || pixelCull(clipmin, clipmax))
     {
       // invisible
-      // skip rasterization
-      OUT.objid = ~0;
+      // skip rasterization of this box
+      OUT.objid = CULL_SKIP_ID;
     }
   }
 }
