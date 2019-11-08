@@ -43,8 +43,6 @@
 #include <nvgl/programmanager_gl.hpp>
 #include <nvgl/base_gl.hpp>
 
-#include <nvh/tnulled.hpp>
-
 #include <vector>
 
 #include "cullingsystem.hpp"
@@ -54,10 +52,6 @@
 using namespace nvtoken;
 
 #include "scansystem.hpp"
-
-using namespace nvh;
-using namespace nvgl;
-using namespace nvmath;
 
 #include "common.h"
 
@@ -99,7 +93,7 @@ namespace ocull
     };
 
     struct {
-      ProgramManager::ProgramID
+      nvgl::ProgramID
         draw_scene,
 
         object_frustum,
@@ -120,39 +114,35 @@ namespace ocull
     } programs;
 
     struct {
-      nvh::TNulled<GLuint>
-        scene;
+      GLuint scene = 0;
     } fbos;
 
     struct {
-      nvh::TNulled<GLuint>
-        scene_ubo,
-        scene_vbo,
-        scene_ibo,
-        scene_matrices,
-        scene_bboxes,
-        scene_matrixindices,
-        scene_indirect,
-
-        scene_token,
-        scene_tokenSizes,
-        scene_tokenOffsets,
-        scene_tokenObjects,
-
-        cull_output,
-        cull_bits,
-        cull_bitsLast,
-        cull_bitsReadback[CYCLIC_FRAMES],
-        cull_indirect,
-        cull_counter,
-
-        cull_token,
-        cull_tokenEmulation,
-        cull_tokenSizes,
-        cull_tokenScan,
-        cull_tokenScanOffsets;
-
-
+      GLuint scene_ubo = 0;
+      GLuint scene_vbo = 0;
+      GLuint scene_ibo = 0;
+      GLuint scene_matrices = 0;
+      GLuint scene_bboxes = 0;
+      GLuint scene_matrixindices = 0;
+      GLuint scene_indirect = 0;
+      
+      GLuint scene_token = 0;
+      GLuint scene_tokenSizes = 0;
+      GLuint scene_tokenOffsets = 0;
+      GLuint scene_tokenObjects = 0;
+      
+      GLuint cull_output = 0;
+      GLuint cull_bits = 0;
+      GLuint cull_bitsLast = 0;
+      GLuint cull_bitsReadback[CYCLIC_FRAMES] = {0};
+      GLuint cull_indirect = 0;
+      GLuint cull_counter = 0;
+      
+      GLuint cull_token = 0;
+      GLuint cull_tokenEmulation = 0;
+      GLuint cull_tokenSizes = 0;
+      GLuint cull_tokenScan = 0;
+      GLuint cull_tokenScanOffsets = 0;
     } buffers;
 
     struct {
@@ -164,10 +154,9 @@ namespace ocull
     } addresses;
 
     struct {
-      nvh::TNulled<GLuint>
-        scene_color,
-        scene_depthstencil,
-        scene_matrices;
+      GLuint  scene_color = 0;
+      GLuint  scene_depthstencil = 0;
+      GLuint  scene_matrices = 0;
     } textures;
 
     struct DrawCmd {
@@ -190,7 +179,7 @@ namespace ocull
 
     struct Vertex {
 
-      Vertex(const geometry::Vertex& vertex){
+      Vertex(const nvh::geometry::Vertex& vertex){
         position  = vertex.position;
         normal    = vertex.normal;
         color     = nvmath::vec4(1.0f);
@@ -246,8 +235,8 @@ namespace ocull
       bool                      noui          = false;
     };
 
-    ProgramManager  m_progManager;
-    CameraControl   m_control;
+    nvgl::ProgramManager  m_progManager;
+    nvh::CameraControl    m_control;
 
     Tweak           m_tweak;
     Tweak           m_tweakLast;
@@ -336,42 +325,42 @@ namespace ocull
   bool Sample::initProgram()
   {
     bool validated(true);
-    m_progManager.m_filetype = ShaderFileManager::FILETYPE_GLSL;
+    m_progManager.m_filetype = nvh::ShaderFileManager::FILETYPE_GLSL;
     m_progManager.addDirectory( std::string("GLSL_" PROJECT_NAME));
-    m_progManager.addDirectory( sysExePath() + std::string(PROJECT_RELDIRECTORY));
+    m_progManager.addDirectory( exePath() + std::string(PROJECT_RELDIRECTORY));
     //m_progManager.addDirectory( std::string(PROJECT_ABSDIRECTORY));
 
-    m_progManager.registerInclude("common.h", "common.h");
-    m_progManager.registerInclude("noise.glsl", "noise.glsl");
+    m_progManager.registerInclude("common.h");
+    m_progManager.registerInclude("noise.glsl");
 
     programs.draw_scene = m_progManager.createProgram(
-      ProgramManager::Definition(GL_VERTEX_SHADER,   "scene.vert.glsl"),
-      ProgramManager::Definition(GL_FRAGMENT_SHADER, "scene.frag.glsl"));
+      nvgl::ProgramManager::Definition(GL_VERTEX_SHADER,   "scene.vert.glsl"),
+      nvgl::ProgramManager::Definition(GL_FRAGMENT_SHADER, "scene.frag.glsl"));
 
     programs.object_raster = m_progManager.createProgram(
-      ProgramManager::Definition(GL_VERTEX_SHADER,   "cull-raster.vert.glsl"),
-      ProgramManager::Definition(GL_GEOMETRY_SHADER, "cull-raster.geo.glsl"),
-      ProgramManager::Definition(GL_FRAGMENT_SHADER, "cull-raster.frag.glsl"));
+      nvgl::ProgramManager::Definition(GL_VERTEX_SHADER,   "cull-raster.vert.glsl"),
+      nvgl::ProgramManager::Definition(GL_GEOMETRY_SHADER, "cull-raster.geo.glsl"),
+      nvgl::ProgramManager::Definition(GL_FRAGMENT_SHADER, "cull-raster.frag.glsl"));
 
     programs.object_frustum = m_progManager.createProgram(
-      ProgramManager::Definition(GL_VERTEX_SHADER,  "cull-basic.vert.glsl"));
+      nvgl::ProgramManager::Definition(GL_VERTEX_SHADER,  "cull-basic.vert.glsl"));
 
     programs.object_hiz = m_progManager.createProgram(
-      ProgramManager::Definition(GL_VERTEX_SHADER,  "#define OCCLUSION\n", "cull-basic.vert.glsl"));
+      nvgl::ProgramManager::Definition(GL_VERTEX_SHADER,  "#define OCCLUSION\n", "cull-basic.vert.glsl"));
 
     programs.bit_regular = m_progManager.createProgram(
-      ProgramManager::Definition(GL_VERTEX_SHADER,  "#define TEMPORAL 0\n", "cull-bitpack.vert.glsl"));
+      nvgl::ProgramManager::Definition(GL_VERTEX_SHADER,  "#define TEMPORAL 0\n", "cull-bitpack.vert.glsl"));
     programs.bit_temporallast = m_progManager.createProgram(
-      ProgramManager::Definition(GL_VERTEX_SHADER,  "#define TEMPORAL TEMPORAL_LAST\n", "cull-bitpack.vert.glsl"));
+      nvgl::ProgramManager::Definition(GL_VERTEX_SHADER,  "#define TEMPORAL TEMPORAL_LAST\n", "cull-bitpack.vert.glsl"));
     programs.bit_temporalnew = m_progManager.createProgram(
-      ProgramManager::Definition(GL_VERTEX_SHADER,  "#define TEMPORAL TEMPORAL_NEW\n", "cull-bitpack.vert.glsl"));
+      nvgl::ProgramManager::Definition(GL_VERTEX_SHADER,  "#define TEMPORAL TEMPORAL_NEW\n", "cull-bitpack.vert.glsl"));
 
     programs.indirect_unordered = m_progManager.createProgram(
-      ProgramManager::Definition(GL_VERTEX_SHADER, "cull-indirectunordered.vert.glsl"));
+      nvgl::ProgramManager::Definition(GL_VERTEX_SHADER, "cull-indirectunordered.vert.glsl"));
 
     programs.depth_mips = m_progManager.createProgram(
-      ProgramManager::Definition(GL_VERTEX_SHADER,   "cull-downsample.vert.glsl"),
-      ProgramManager::Definition(GL_FRAGMENT_SHADER, "cull-downsample.frag.glsl"));
+      nvgl::ProgramManager::Definition(GL_VERTEX_SHADER,   "cull-downsample.vert.glsl"),
+      nvgl::ProgramManager::Definition(GL_FRAGMENT_SHADER, "cull-downsample.frag.glsl"));
 
     programs.token_sizes = m_progManager.createProgram(
       nvgl::ProgramManager::Definition(GL_VERTEX_SHADER, "cull-tokensizes.vert.glsl"));
@@ -421,12 +410,12 @@ namespace ocull
   bool Sample::initScene()
   {
     { // Scene UBO
-      newBuffer(buffers.scene_ubo);
+      nvgl::newBuffer(buffers.scene_ubo);
       glNamedBufferData(buffers.scene_ubo, sizeof(SceneData) + sizeof(GLuint64), NULL, GL_DYNAMIC_DRAW);
     }
 
     { // Scene Geometry
-      geometry::Mesh<Vertex>    sceneMesh;
+      nvh::geometry::Mesh<Vertex>    sceneMesh;
 
       // we store all geometries in one big mesh, for sake of simplicity
       // and to allow standard MultiDrawIndirect to be efficient
@@ -442,14 +431,14 @@ namespace ocull
 
         switch(i % 2){
         case 0:
-          geometry::Sphere<Vertex>::add(sceneMesh,identity,16*resmul,8*resmul);
+          nvh::geometry::Sphere<Vertex>::add(sceneMesh,identity,16*resmul,8*resmul);
           break;
         case 1:
-          geometry::Box<Vertex>::add(sceneMesh,identity,8*resmul,8*resmul,8*resmul);
+          nvh::geometry::Box<Vertex>::add(sceneMesh,identity,8*resmul,8*resmul,8*resmul);
           break;
         }
 
-        vec4 color(frand(),frand(),frand(),1.0f);
+        vec4 color(nvh::frand(),nvh::frand(),nvh::frand(),1.0f);
         for (uint v = oldverts; v < sceneMesh.getVerticesCount(); v++){
           sceneMesh.m_vertices[v].color = color;
         }
@@ -461,10 +450,10 @@ namespace ocull
         geometries.push_back(geom);
       }
 
-      newBuffer(buffers.scene_ibo);
+      nvgl::newBuffer(buffers.scene_ibo);
       glNamedBufferData(buffers.scene_ibo, sceneMesh.getTriangleIndicesSize(), sceneMesh.m_indicesTriangles.data(), GL_STATIC_DRAW);
 
-      newBuffer(buffers.scene_vbo);
+      nvgl::newBuffer(buffers.scene_vbo);
       glNamedBufferData(buffers.scene_vbo, sceneMesh.getVerticesSize(), sceneMesh.m_vertices.data(), GL_STATIC_DRAW);
 
 
@@ -482,7 +471,7 @@ namespace ocull
         vec3  pos(i % grid, (i / grid) % grid, i / (grid * grid));
 
         pos -=  vec3( grid/2, grid/2, grid/2);
-        pos += (vec3(frand(),frand(),frand())*2.0f ) - vec3(1.0f);
+        pos += (vec3(nvh::frand(),nvh::frand(),nvh::frand())*2.0f ) - vec3(1.0f);
         pos /=  float(grid);
 
         float scale;
@@ -497,8 +486,8 @@ namespace ocull
 
         mat4 matrix = 
           nvmath::translation_mat4( pos) *
-          nvmath::rotation_mat4_y(frand()*nv_pi) *
-          nvmath::scale_mat4( (vec3(scale) * (vec3(0.25f) + vec3(frand(),frand(),frand())*0.5f ))/float(grid) );
+          nvmath::rotation_mat4_y(nvh::frand()*nv_pi) *
+          nvmath::scale_mat4( (vec3(scale) * (vec3(0.25f) + vec3(nvh::frand(),nvh::frand(),nvh::frand())*0.5f ))/float(grid) );
 
         m_sceneMatrices.push_back(matrix);
         m_sceneMatrices.push_back(nvmath::transpose(nvmath::invert(matrix)));
@@ -523,12 +512,12 @@ namespace ocull
       m_sceneVisBits.clear();
       m_sceneVisBits.resize( snapdiv(m_sceneCmds.size(),32), 0xFFFFFFFF );
 
-      newBuffer(buffers.scene_indirect);
+      nvgl::newBuffer(buffers.scene_indirect);
       glNamedBufferData(buffers.scene_indirect,sizeof(DrawCmd) * m_sceneCmds.size(), m_sceneCmds.data(), GL_STATIC_DRAW);
 
-      newBuffer(buffers.scene_matrices);
+      nvgl::newBuffer(buffers.scene_matrices);
       glNamedBufferData(buffers.scene_matrices, sizeof(mat4) * m_sceneMatrices.size(), m_sceneMatrices.data(), GL_STATIC_DRAW);
-      newTexture(textures.scene_matrices, GL_TEXTURE_BUFFER);
+      nvgl::newTexture(textures.scene_matrices, GL_TEXTURE_BUFFER);
       glTextureBuffer(textures.scene_matrices, GL_RGBA32F, buffers.scene_matrices);
 
       if (has_GL_ARB_bindless_texture){
@@ -537,30 +526,30 @@ namespace ocull
         glNamedBufferSubData(buffers.scene_ubo, sizeof(SceneData), sizeof(GLuint64), &handle);
       }
 
-      newBuffer(buffers.scene_bboxes);
+      nvgl::newBuffer(buffers.scene_bboxes);
       glNamedBufferData(buffers.scene_bboxes, sizeof(CullBbox) * bboxes.size(), bboxes.data(), GL_STATIC_DRAW);
       
-      newBuffer(buffers.scene_matrixindices);
+      nvgl::newBuffer(buffers.scene_matrixindices);
       glNamedBufferData(buffers.scene_matrixindices, sizeof(int) * matrixIndex.size(), matrixIndex.data(), GL_STATIC_DRAW);
 
       // for culling
-      newBuffer(buffers.cull_indirect);
+      nvgl::newBuffer(buffers.cull_indirect);
       glNamedBufferData(buffers.cull_indirect, sizeof(DrawCmd) * m_sceneCmds.size(), NULL, GL_DYNAMIC_COPY);
 
-      newBuffer(buffers.cull_counter);
+      nvgl::newBuffer(buffers.cull_counter);
       glNamedBufferData(buffers.cull_counter, sizeof(int), NULL, GL_DYNAMIC_COPY);
 
-      newBuffer(buffers.cull_output);
+      nvgl::newBuffer(buffers.cull_output);
       glNamedBufferData(buffers.cull_output, snapdiv( m_sceneCmds.size(), 32) * 32 * sizeof(uint32_t), NULL, GL_DYNAMIC_COPY);
 
-      newBuffer(buffers.cull_bits);
+      nvgl::newBuffer(buffers.cull_bits);
       glNamedBufferData(buffers.cull_bits, snapdiv( m_sceneCmds.size(), 32) * sizeof( uint32_t ), NULL, GL_DYNAMIC_COPY);
 
-      newBuffer(buffers.cull_bitsLast);
+      nvgl::newBuffer(buffers.cull_bitsLast);
       glNamedBufferData(buffers.cull_bitsLast, snapdiv( m_sceneCmds.size(), 32) * sizeof( uint32_t ), NULL, GL_DYNAMIC_COPY);
 
       for (int i = 0; i < CYCLIC_FRAMES; i++) {
-        newBuffer( buffers.cull_bitsReadback[i] );
+        nvgl::newBuffer( buffers.cull_bitsReadback[i] );
         glNamedBufferStorage( buffers.cull_bitsReadback[i], snapdiv( m_sceneCmds.size(), 32 ) * sizeof( uint32_t ), NULL, GL_MAP_PERSISTENT_BIT | GL_CLIENT_STORAGE_BIT | GL_MAP_READ_BIT | GL_MAP_COHERENT_BIT );
       }
 
@@ -662,33 +651,33 @@ namespace ocull
 
       m_tokenStreamCulled = m_tokenStream;
 
-      newBuffer(buffers.scene_token);
+      nvgl::newBuffer(buffers.scene_token);
       glNamedBufferData(buffers.scene_token, m_tokenStream.size(), m_tokenStream.data(), GL_STATIC_DRAW);
 
       // for command list culling
 
-      newBuffer(buffers.scene_tokenSizes);
+      nvgl::newBuffer(buffers.scene_tokenSizes);
       glNamedBufferData(buffers.scene_tokenSizes, tokenSizes.size() * sizeof(GLuint), tokenSizes.data(), GL_STATIC_DRAW);
 
-      newBuffer(buffers.scene_tokenOffsets);
+      nvgl::newBuffer(buffers.scene_tokenOffsets);
       glNamedBufferData(buffers.scene_tokenOffsets, tokenOffsets.size() * sizeof(GLuint), tokenOffsets.data(), GL_STATIC_DRAW);
 
-      newBuffer(buffers.scene_tokenObjects);
+      nvgl::newBuffer(buffers.scene_tokenObjects);
       glNamedBufferData(buffers.scene_tokenObjects, tokenObjects.size() * sizeof(GLint), tokenObjects.data(), GL_STATIC_DRAW);
 
-      newBuffer(buffers.cull_token);
+      nvgl::newBuffer(buffers.cull_token);
       glNamedBufferData(buffers.cull_token, m_tokenStream.size(), NULL, GL_DYNAMIC_COPY);
 
-      newBuffer(buffers.cull_tokenEmulation); // only for emulation
+      nvgl::newBuffer(buffers.cull_tokenEmulation); // only for emulation
       glNamedBufferData(buffers.cull_tokenEmulation, m_tokenStream.size(), NULL, GL_DYNAMIC_READ);
 
-      newBuffer(buffers.cull_tokenSizes);
+      nvgl::newBuffer(buffers.cull_tokenSizes);
       glNamedBufferData(buffers.cull_tokenSizes, tokenSizes.size() * sizeof(GLuint), NULL, GL_DYNAMIC_COPY);
 
-      newBuffer(buffers.cull_tokenScan);
+      nvgl::newBuffer(buffers.cull_tokenScan);
       glNamedBufferData(buffers.cull_tokenScan, tokenSizes.size() * sizeof(GLuint), NULL, GL_DYNAMIC_COPY);
 
-      newBuffer(buffers.cull_tokenScanOffsets);
+      nvgl::newBuffer(buffers.cull_tokenScanOffsets);
       glNamedBufferData(buffers.cull_tokenScanOffsets, ScanSystem::getOffsetSize(GLuint(tokenSizes.size())), NULL, GL_DYNAMIC_COPY);
     }
 
@@ -699,7 +688,7 @@ namespace ocull
   bool Sample::initFramebuffers(int width, int height)
   {
 
-    newTexture(textures.scene_color, GL_TEXTURE_2D);
+    nvgl::newTexture(textures.scene_color, GL_TEXTURE_2D);
     glBindTexture (GL_TEXTURE_2D, textures.scene_color);
     glTexStorage2D(GL_TEXTURE_2D, 1, fboFormat, width, height);
 
@@ -710,7 +699,7 @@ namespace ocull
       dim/=2;
     }
 
-    newTexture(textures.scene_depthstencil, GL_TEXTURE_2D);
+    nvgl::newTexture(textures.scene_depthstencil, GL_TEXTURE_2D);
     glBindTexture (GL_TEXTURE_2D, textures.scene_depthstencil);
     glTexStorage2D(GL_TEXTURE_2D, levels, GL_DEPTH24_STENCIL8, width, height);
     glTexParameteri(GL_TEXTURE_2D,GL_TEXTURE_MIN_FILTER,GL_NEAREST_MIPMAP_NEAREST);
@@ -720,7 +709,7 @@ namespace ocull
     glTexParameteri(GL_TEXTURE_2D,GL_TEXTURE_WRAP_T, GL_CLAMP_TO_EDGE);
     glBindTexture (GL_TEXTURE_2D, 0);
 
-    newFramebuffer(fbos.scene);
+    nvgl::newFramebuffer(fbos.scene);
     glBindFramebuffer(GL_FRAMEBUFFER,     fbos.scene);
     glFramebufferTexture2D(GL_FRAMEBUFFER, GL_COLOR_ATTACHMENT0,        GL_TEXTURE_2D, textures.scene_color, 0);
     glFramebufferTexture2D(GL_FRAMEBUFFER, GL_DEPTH_STENCIL_ATTACHMENT, GL_TEXTURE_2D, textures.scene_depthstencil, 0);
@@ -851,7 +840,7 @@ namespace ocull
     float dist = m_control.m_sceneDimension * 0.75f;
     m_control.m_viewMatrix = nvmath::look_at(m_control.m_sceneOrbit - normalize(vec3(1,0,-1))*dist, m_control.m_sceneOrbit, vec3(0,1,0));
 
-    m_statsTime = NVPWindow::sysGetTime();
+    m_statsTime = NVPSystem::getTime();
 
     return validated;
   }
@@ -1405,8 +1394,8 @@ namespace ocull
     }
 #endif
 
-    if ( m_tweak.drawmode == DRAW_STANDARD && (NVPWindow::sysGetTime() - m_statsTime) > 2.0){
-      m_statsTime = NVPWindow::sysGetTime();
+    if ( m_tweak.drawmode == DRAW_STANDARD && (NVPSystem::getTime() - m_statsTime) > 2.0){
+      m_statsTime = NVPSystem::getTime();
       m_statsPrint = true;
     }
     else{
@@ -1535,7 +1524,7 @@ using namespace ocull;
 
 int main(int argc, const char** argv)
 {
-  NVPWindow::System system(argv[0], PROJECT_NAME);
+  NVPSystem system(argv[0], PROJECT_NAME);
 
   Sample sample;
   return sample.run(
