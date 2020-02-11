@@ -29,7 +29,8 @@
 #ifndef CULLINGSYSTEM_H__
 #define CULLINGSYSTEM_H__
 
-#include <stdint.h>
+#include <cstddef>
+#include <cstdint>
 #include <nvgl/extensions_gl.hpp>
 
 

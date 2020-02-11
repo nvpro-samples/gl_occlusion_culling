@@ -167,7 +167,7 @@ namespace nvtoken
 
   // Emulation related
 
-  static __forceinline GLenum nvtokenDrawCommandSequenceSW( const void* NV_RESTRICT stream, size_t streamSize, GLenum mode, GLenum type, const StateSystem::State& state ) 
+  static inline GLenum nvtokenDrawCommandSequenceSW( const void* NV_RESTRICT stream, size_t streamSize, GLenum mode, GLenum type, const StateSystem::State& state )
   {
     const GLubyte* NV_RESTRICT current = (GLubyte*)stream;
     const GLubyte* streamEnd = current + streamSize;

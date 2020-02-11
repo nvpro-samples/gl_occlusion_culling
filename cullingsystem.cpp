@@ -29,6 +29,7 @@
 
 #include "cullingsystem.hpp"
 #include <assert.h>
+#include <string.h>
 
 #define DEBUG_VISIBLEBOXES  0
 

@@ -31,6 +31,7 @@
 #define SCANSYSTEM_H__
 
 #include <nvgl/extensions_gl.hpp>
+#include <cstddef>
 
 class ScanSystem {
 public:
