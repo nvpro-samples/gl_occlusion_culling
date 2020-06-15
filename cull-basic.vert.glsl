@@ -83,6 +83,10 @@ layout(location=2) in int  matrixIndex;
 
 vec4 getBoxCorner(int n)
 {
+#if 1
+  bvec3 useMax = bvec3((n & 1) != 0, (n & 2) != 0, (n & 4) != 0);
+  return vec4(mix(bboxMin, bboxMax, useMax),1);
+#else
   switch(n){
   case 0:
     return vec4(bboxMin.x,bboxMin.y,bboxMin.z,1);
@@ -101,7 +105,7 @@ vec4 getBoxCorner(int n)
   case 7:
     return vec4(bboxMax.x,bboxMax.y,bboxMax.z,1);
   }
-
+#endif
 }
 
 uint getCullBits(vec4 hPos)
