@@ -737,7 +737,7 @@ namespace ocull
   {
     m_statsPrint = false;
     
-    ImGuiH::Init(m_windowState.m_viewSize[0], m_windowState.m_viewSize[1], this);
+    ImGuiH::Init(m_windowState.m_winSize[0], m_windowState.m_winSize[1], this);
     ImGui::InitGL();
 
     glPixelStorei(GL_UNPACK_ALIGNMENT, 1);
@@ -757,7 +757,7 @@ namespace ocull
 
     validated = validated && initProgram();
     validated = validated && initScene();
-    validated = validated && initFramebuffers(m_windowState.m_viewSize[0],m_windowState.m_viewSize[1]);
+    validated = validated && initFramebuffers(m_windowState.m_winSize[0],m_windowState.m_winSize[1]);
 
     if (!validated) return false;
 
@@ -846,8 +846,8 @@ namespace ocull
 
   void Sample::processUI(double time)
   {
-    int width = m_windowState.m_viewSize[0];
-    int height = m_windowState.m_viewSize[1];
+    int width = m_windowState.m_winSize[0];
+    int height = m_windowState.m_winSize[1];
 
     // Update imgui configuration
     auto &imgui_io = ImGui::GetIO();
@@ -1091,8 +1091,8 @@ namespace ocull
   void Sample::drawCullingTemporal(CullingSystem::Job& cullJob)
   {
     CullingSystem::View view;
-    view.viewWidth         = float(m_windowState.m_viewSize[0]);
-    view.viewHeight        = float(m_windowState.m_viewSize[1]);
+    view.viewWidth         = float(m_windowState.m_winSize[0]);
+    view.viewHeight        = float(m_windowState.m_winSize[1]);
     view.viewCullThreshold = m_tweak.minPixelSize;
     memcpy(view.viewPos, m_sceneUbo.viewPos.get_value(), sizeof(view.viewPos));
     memcpy(view.viewDir, m_sceneUbo.viewDir.get_value(), sizeof(view.viewDir));
@@ -1128,7 +1128,7 @@ namespace ocull
       drawScene(false,"Last");
 
       // changes FBO binding
-      m_cullSys.buildDepthMipmaps( textures.scene_depthstencil, m_windowState.m_viewSize[0], m_windowState.m_viewSize[1]);
+      m_cullSys.buildDepthMipmaps( textures.scene_depthstencil, m_windowState.m_winSize[0], m_windowState.m_winSize[1]);
 
       {
         NV_PROFILE_GL_SECTION("CullH");
@@ -1189,8 +1189,8 @@ namespace ocull
   void Sample::drawCullingRegular(CullingSystem::Job& cullJob)
   {
     CullingSystem::View view;
-    view.viewWidth         = float(m_windowState.m_viewSize[0]);
-    view.viewHeight        = float(m_windowState.m_viewSize[1]);
+    view.viewWidth         = float(m_windowState.m_winSize[0]);
+    view.viewHeight        = float(m_windowState.m_winSize[1]);
     view.viewCullThreshold = m_tweak.minPixelSize;
     memcpy(view.viewPos, m_sceneUbo.viewPos.get_value(), sizeof(view.viewPos));
     memcpy(view.viewDir, m_sceneUbo.viewDir.get_value(), sizeof(view.viewDir));
@@ -1225,7 +1225,7 @@ namespace ocull
         {
           NV_PROFILE_GL_SECTION("Mip");
           // changes FBO binding
-          m_cullSys.buildDepthMipmaps( textures.scene_depthstencil, m_windowState.m_viewSize[0], m_windowState.m_viewSize[1]);
+          m_cullSys.buildDepthMipmaps( textures.scene_depthstencil, m_windowState.m_winSize[0], m_windowState.m_winSize[1]);
         }
 
 
@@ -1271,8 +1271,8 @@ namespace ocull
   void Sample::drawCullingRegularLastFrame(CullingSystem::Job& cullJob)
   {
     CullingSystem::View view;
-    view.viewWidth         = float(m_windowState.m_viewSize[0]);
-    view.viewHeight        = float(m_windowState.m_viewSize[1]);
+    view.viewWidth         = float(m_windowState.m_winSize[0]);
+    view.viewHeight        = float(m_windowState.m_winSize[1]);
     view.viewCullThreshold = m_tweak.minPixelSize;
     memcpy(view.viewPos, m_sceneUbo.viewPos.get_value(), sizeof(view.viewPos));
     memcpy(view.viewDir, m_sceneUbo.viewDir.get_value(), sizeof(view.viewDir));
@@ -1309,7 +1309,7 @@ namespace ocull
       {
         NV_PROFILE_GL_SECTION("Mip");
         // changes FBO binding
-        m_cullSys.buildDepthMipmaps( textures.scene_depthstencil, m_windowState.m_viewSize[0], m_windowState.m_viewSize[1]);
+        m_cullSys.buildDepthMipmaps( textures.scene_depthstencil, m_windowState.m_winSize[0], m_windowState.m_winSize[1]);
       }
 
       {
@@ -1346,7 +1346,7 @@ namespace ocull
 
     processUI(time);
 
-    m_control.processActions(m_windowState.m_viewSize,
+    m_control.processActions(m_windowState.m_winSize,
       nvmath::vec2f(m_windowState.m_mouseCurrent[0],m_windowState.m_mouseCurrent[1]),
       m_windowState.m_mouseButtonFlags, m_windowState.m_mouseWheel);
 
@@ -1401,8 +1401,8 @@ namespace ocull
       m_statsPrint = false;
     }
 
-    int width   = m_windowState.m_viewSize[0];
-    int height  = m_windowState.m_viewSize[1];
+    int width   = m_windowState.m_winSize[0];
+    int height  = m_windowState.m_winSize[1];
 
     {
       glBindFramebuffer(GL_FRAMEBUFFER, fbos.scene);
