@@ -85,7 +85,7 @@ vec4 getBoxCorner(int n)
 {
 #if 1
   bvec3 useMax = bvec3((n & 1) != 0, (n & 2) != 0, (n & 4) != 0);
-  return vec4(mix(bboxMin, bboxMax, useMax),1);
+  return vec4(mix(bboxMin.xyz, bboxMax.xyz, useMax),1);
 #else
   switch(n){
   case 0:
