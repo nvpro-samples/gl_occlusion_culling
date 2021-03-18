@@ -1,4 +1,4 @@
-cmake_minimum_required(VERSION 2.8)
+cmake_minimum_required(VERSION 3.5)
 get_filename_component(PROJNAME ${CMAKE_CURRENT_SOURCE_DIR} NAME)
 Project(${PROJNAME})
 Message(STATUS "-------------------------------")
@@ -6,28 +6,21 @@ Message(STATUS "Processing Project ${PROJNAME}:")
 
 #####################################################################################
 # look for shared_sources 1) as a sub-folder 2) at some other locations
-# this cannot be put anywhere else since we still didn't find CMakeLists_include.txt yet
+# this cannot be put anywhere else since we still didn't find setup.cmake yet
 #
-if(NOT BASE_DIRECTORY) # if not defined, it means this cmake file was called as the first entry point and not included
-  # check if the external repository is outside or inside the project (as a sub-module)
-  # testing the file CMakeLists_include.txt because when sub-modules are not cloned, the folders are still there...
-  # we also assume here that if shared_sources is there, shared_external is, too...
-  SET(BASE_DIRECTORY "" CACHE FILEPATH "folder containing shared_sources")
-  SET(ADD_SUBDIR_BELOW 1)
-  if(EXISTS ${CMAKE_CURRENT_SOURCE_DIR}/shared_sources/CMakeLists_include.txt)
-    SET(BASE_DIRECTORY ${CMAKE_CURRENT_SOURCE_DIR})
-  elseif(EXISTS ${CMAKE_CURRENT_SOURCE_DIR}/../shared_sources/CMakeLists_include.txt)
-    SET(BASE_DIRECTORY ${CMAKE_CURRENT_SOURCE_DIR}/..)
-  elseif(EXISTS ${CMAKE_CURRENT_SOURCE_DIR}/../../shared_sources/CMakeLists_include.txt)
-    SET(BASE_DIRECTORY ${CMAKE_CURRENT_SOURCE_DIR}/../..)
-  else()
-  endif()
-endif(NOT BASE_DIRECTORY)
+if(NOT BASE_DIRECTORY)
 
-if(EXISTS ${BASE_DIRECTORY}/shared_sources/CMakeLists_include.txt)
-  INCLUDE(${BASE_DIRECTORY}/shared_sources/CMakeLists_include.txt)
+  find_path(BASE_DIRECTORY
+    NAMES shared_sources/cmake/setup.cmake
+    PATHS ${CMAKE_CURRENT_SOURCE_DIR} ${CMAKE_CURRENT_SOURCE_DIR}/.. ${CMAKE_CURRENT_SOURCE_DIR}/../.. 
+    REQUIRED
+    DOC "Directory containing shared_sources"
+    )
+endif()
+if(EXISTS ${BASE_DIRECTORY}/shared_sources/cmake/setup.cmake)
+  include(${BASE_DIRECTORY}/shared_sources/cmake/setup.cmake)
 else()
-  Message(FATAL_ERROR "could not find base directory, please set BASE_DIRECTORY to folder containing shared_sources")
+  message(FATAL_ERROR "could not find base directory, please set BASE_DIRECTORY to folder containing shared_sources")
 endif()
     
 _add_project_definitions(${PROJNAME})
@@ -94,7 +87,7 @@ endforeach(RELEASELIB)
 #####################################################################################
 # copies binaries that need to be put next to the exe files (ZLib, etc.)
 #
-_copy_binaries_to_target( ${PROJNAME} )
+_finalize_target( ${PROJNAME} )
 LIST(APPEND GLSL_FILES "common.h")
 install(FILES ${GLSL_FILES} CONFIGURATIONS Release DESTINATION "bin_${ARCH}/GLSL_${PROJNAME}")
 install(FILES ${GLSL_FILES} CONFIGURATIONS Debug DESTINATION "bin_${ARCH}_debug/GLSL_${PROJNAME}")
