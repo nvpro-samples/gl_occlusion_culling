@@ -1,0 +1,22 @@
+.clang-format
+.editorconfig
+
+#############################
+#Spirv
+#############################
+*.spv
+*.spva
+*.sass
+*.sassbin
+*.bat
+
+#############################
+#specific to the project
+#############################
+cmake_built
+cmake_build
+build
+_install
+bin_x64
+shared_external
+shared_sources
