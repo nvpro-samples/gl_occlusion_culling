@@ -1,4 +1,4 @@
-/* Copyright (c) 2014-2019, NVIDIA CORPORATION. All rights reserved.
+/* Copyright (c) 2014-2021, NVIDIA CORPORATION. All rights reserved.
  *
  * Redistribution and use in source and binary forms, with or without
  * modification, are permitted provided that the following conditions
@@ -311,7 +311,10 @@ void CullingSystem::JobIndirectUnordered::resultFromBits( const Buffer& bufferVi
   bufferVisBitsCurrent.   BindBufferRange(GL_SHADER_STORAGE_BUFFER, 2);
   m_bufferObjectIndirects.BindBufferRange(GL_SHADER_STORAGE_BUFFER, 1);
   m_bufferIndirectResult. BindBufferRange(GL_SHADER_STORAGE_BUFFER, 0);
-  m_bufferIndirectResult. ClearBufferSubData(GL_SHADER_STORAGE_BUFFER, GL_R32UI, GL_RED_INTEGER, GL_UNSIGNED_INT, 0);
+  if (m_clearResults)
+  {
+    m_bufferIndirectResult. ClearBufferSubData(GL_SHADER_STORAGE_BUFFER, GL_R32UI, GL_RED_INTEGER, GL_UNSIGNED_INT, 0);
+  }
 
   glMemoryBarrier(GL_SHADER_STORAGE_BARRIER_BIT);
   glDrawArrays(GL_POINTS,0,m_numObjects);

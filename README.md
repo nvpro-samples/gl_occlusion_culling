@@ -4,9 +4,9 @@
 
 This sample implements a batched occlusion culling system, which is not based on individual occlusion queries anymore, but uses shaders to cull many boxes at once. The principle algorithms are also illustrated towards the end of the presentation slides of [GTC 2014](http://on-demand.gputechconf.com/gtc/2014/presentations/S4379-opengl-44-scene-rendering-techniques.pdf) and [SIGGRAPH 2014](http://on-demand.gputechconf.com/siggraph/2014/presentation/SG4117-OpenGL-Scene-Rendering-Techniques.pdf)
 
-It leverages the **ARB_multi_draw_indirect** (MDI) extension to implement latency-free occlusion culling. The MDI technique works well with a simplified scene setup where all geometry is stored in one big VBO/IBO pairing and no shader changes are done in between.
+It leverages the **GL_ARB_multi_draw_indirect** (MDI) extension to implement latency-free occlusion culling. The MDI technique works well with a simplified scene setup where all geometry is stored in one big VBO/IBO pairing and no shader changes are done in between. This approach can be enhanced with **GL_ARB_indirect_parameters**, which allows to source the number of drawcalls from the GPU as well.
 
-The slides mention that this approach could be extended to use NV_bindless_multi_draw_indirect to render drawcalls using different VBO/IBOs in one go. With the **NV_command_list** however an even better approach is possible, which is also implemented in the sample and allows more flexible state changes. Please refer to [gl commandlist basic](https://github.com/nvpro-samples/gl_commandlist_basic) for an introduction on NV_command_list.
+The slides mention that this approach could be extended to use NV_bindless_multi_draw_indirect to render drawcalls using different VBO/IBOs in one go. With the **GL_NV_command_list** however an even better approach is possible, which is also implemented in the sample and allows more flexible state changes. Please refer to [gl commandlist basic](https://github.com/nvpro-samples/gl_commandlist_basic) for an introduction on NV_command_list.
 
 > **Note:** For simplicity the sample uses one draw shader only, in a real-world use case one would have to organize multiple draw indirect culling lists per shader, or multiple NV_command_list token sequences with stateobjects. The latter is shown in [gl cadscene rendertechniques](https://github.com/nvpro-samples/gl_cadscene_rendertechniques)
 
@@ -59,10 +59,14 @@ retrieve a fence sync and then in the next frame use a client wait before actual
 The occlusion culling results should be copied after doing the occlusion-tests and ideally before doing any post-processing, this way we can reduce the wait time on the client. 
 
 - **MultiDrawIndirect GPU:**
-This technique leverages the **ARB_multi_draw_indirect** and is free of synchronization. Instead of reading back the results, we manipulate the **GL_DRAW_INDIRECT_BUFFER**. The indirect buffer is cleared to 0, which means it would not render anything if executed. Then we use an **GL_ATOMIC_COUNTER_BUFFER** to append all the visible DrawIndirect structures into this buffer.
-> **Note**: Despite having the final drawindirect count available on the GPU through the atomic counter, the sample does not make use GL_ARB_indirect_parameters. Its usage comes with a certain overhead that may make things worse if the drawcalls have only low complexity. 
-> 
-> Usage of GL_ATOMIC_COUNTER_BUFFER to append the final buffer, means we lose the ordering of the original scene.
+This technique leverages the **GL_ARB_multi_draw_indirect** and is free of synchronization. Instead of reading back the results, we manipulate the **GL_DRAW_INDIRECT_BUFFER**. The indirect buffer is cleared to 0, which means it would not render anything if executed, because all the structs within have their counters set to zero. Then we use an **GL_ATOMIC_COUNTER_BUFFER** to append all the visible DrawIndirect structures into this buffer.
+> **Note**: Usage of GL_ATOMIC_COUNTER_BUFFER to append the final buffer, means we lose the ordering of the original scene.
+
+- **MultiDrawIndirect & count GPU:**
+This technique is very similar to the above but also uses **GL_ARB_indirect_parameters** to be able to directly use the **GL_ATOMIC_COUNTER_BUFFER** that stores the number of indirect commands after the culling phase as **GL_PARAMETER_BUFFER_ARB** input for the
+drawcall `glMultiDrawElementsIndirectCountARB`. It also allows us to avoid clearing the output draw indirects when filling them, because only
+relevant mdi structs will be read.
+> **Note**: Its usage comes with a certain overhead that may make things worse if the drawcalls have only very low complexity, which can be the case in our sample. In real-world data-set where each object has thousands of triangles, using it is recommended.
 
 - **NVCmdList GPU:**
 
@@ -112,7 +116,7 @@ As expected the HiZ's conservative approach yields higher percentage of pontenti
 
 We can also avoid any stalls when using the GPU variants (MultiDrawIndirect or NVCmdList).
 
-**Indirect GPU:** 
+**MultiDrawIndirect GPU:** 
 
 ```
 Raster: Temporal Current Frame
@@ -141,7 +145,7 @@ Raster: Temporal Current Frame
 
 ![cadscene results](https://github.com/nvpro-samples/gl_occlusion_culling/blob/master/doc/cadsceneresults.png)
 
-> Be aware that for MDI the use of ARB_indirect_parameters to pass the number of active draw commands is not advised, either don't or prefer the use of NV_command_list with GL_TERMINATE_SEQUENCE_COMMAND_NV. It is however still beneficial for performance to create a compact stream of draw indirect commands. 
+> Be aware that for MDI the use of ARB_indirect_parameters to pass the number of active draw commands is not advised on pre-Turing generation hardware, either don't or prefer the use of NV_command_list with GL_TERMINATE_SEQUENCE_COMMAND_NV. It is however always beneficial for performance to create a compact stream of draw indirect commands. 
 
 ### Sample Highlights
 

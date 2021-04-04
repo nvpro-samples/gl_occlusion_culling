@@ -1,5 +1,5 @@
 /*-----------------------------------------------------------------------
-  Copyright (c) 2014, NVIDIA. All rights reserved.
+  Copyright (c) 2014-2021, NVIDIA. All rights reserved.
 
   Redistribution and use in source and binary forms, with or without
   modification, are permitted provided that the following conditions
@@ -83,6 +83,7 @@ public:
   {
     DRAW_STANDARD,
     DRAW_MULTIDRAWINDIRECT,
+    DRAW_MULTIDRAWINDIRECT_COUNT,
     DRAW_TOKENBUFFER_EMULATION,
     DRAW_TOKENBUFFER,
   };
@@ -791,6 +792,8 @@ bool Sample::begin()
     m_cullJobIndirect.m_bufferObjectIndirects    = CullingSystem::Buffer(buffers.scene_indirect);
     m_cullJobIndirect.m_bufferIndirectCounter    = CullingSystem::Buffer(buffers.cull_counter);
     m_cullJobIndirect.m_bufferIndirectResult     = CullingSystem::Buffer(buffers.cull_indirect);
+    // no need to clear results given the count buffer will only cause filled content to be rendered
+    m_cullJobIndirect.m_clearResults             = m_tweak.drawmode != DRAW_MULTIDRAWINDIRECT_COUNT;
 
     initCullingJob(m_cullJobToken);
     m_cullJobToken.program_cmds  = m_progManager.get(programs.token_cmds);
@@ -829,6 +832,10 @@ bool Sample::begin()
 
     m_ui.enumAdd(GUI_DRAW, DRAW_STANDARD, "standard CPU");
     m_ui.enumAdd(GUI_DRAW, DRAW_MULTIDRAWINDIRECT, "MultiDrawIndirect GPU");
+    if (has_GL_ARB_indirect_parameters)
+    {
+      m_ui.enumAdd(GUI_DRAW, DRAW_MULTIDRAWINDIRECT_COUNT, "MultiDrawIndirect & count GPU");
+    }
     m_ui.enumAdd(GUI_DRAW, DRAW_TOKENBUFFER_EMULATION, "nvcmdlist emulation");
     if(m_cmdlistNative)
     {
@@ -1020,6 +1027,22 @@ void Sample::drawScene(bool depthonly, const char* what)
     }
     glMultiDrawElementsIndirect(GL_TRIANGLES, GL_UNSIGNED_INT, NULL, (GLsizei)m_sceneCmds.size(), 0);
     glBindBuffer(GL_DRAW_INDIRECT_BUFFER, 0);
+  }
+  else if(m_tweak.drawmode == DRAW_MULTIDRAWINDIRECT_COUNT)
+  {
+    glBindBuffer(GL_DRAW_INDIRECT_BUFFER, m_tweak.culling ? buffers.cull_indirect : buffers.scene_indirect);
+    if(m_tweak.culling)
+    {
+      glBindBuffer(GL_PARAMETER_BUFFER_ARB, buffers.cull_counter);
+      glMemoryBarrier(GL_COMMAND_BARRIER_BIT);
+      glMultiDrawElementsIndirectCountARB(GL_TRIANGLES, GL_UNSIGNED_INT, NULL, 0, (GLsizei)m_sceneCmds.size(), 0);
+    }
+    else
+    {
+      glMultiDrawElementsIndirect(GL_TRIANGLES, GL_UNSIGNED_INT, NULL, (GLsizei)m_sceneCmds.size(), 0);
+    }
+    glBindBuffer(GL_DRAW_INDIRECT_BUFFER, 0);
+    glBindBuffer(GL_PARAMETER_BUFFER_ARB, 0);
   }
   else if(m_tweak.drawmode == DRAW_TOKENBUFFER || m_tweak.drawmode == DRAW_TOKENBUFFER_EMULATION)
   {
@@ -1479,8 +1502,9 @@ void Sample::think(double time)
 
     CullingSystem::Job& cullJob = (m_tweak.drawmode == DRAW_STANDARD) ?
                                       (CullingSystem::Job&)m_cullJobReadback :
-                                      (m_tweak.drawmode == DRAW_MULTIDRAWINDIRECT ? (CullingSystem::Job&)m_cullJobIndirect :
-                                                                                    (CullingSystem::Job&)m_cullJobToken);
+                                      (m_tweak.drawmode == DRAW_MULTIDRAWINDIRECT || m_tweak.drawmode == DRAW_MULTIDRAWINDIRECT_COUNT ?
+                                           (CullingSystem::Job&)m_cullJobIndirect :
+                                           (CullingSystem::Job&)m_cullJobToken);
 
     if(m_tweak.drawmode == DRAW_STANDARD)
     {

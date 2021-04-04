@@ -1,4 +1,4 @@
-/* Copyright (c) 2014-2019, NVIDIA CORPORATION. All rights reserved.
+/* Copyright (c) 2014-2021, NVIDIA CORPORATION. All rights reserved.
  *
  * Redistribution and use in source and binary forms, with or without
  * modification, are permitted provided that the following conditions
@@ -192,6 +192,7 @@ public:
   // multidrawindirect based
   class JobIndirectUnordered : public Job {
   public:
+    bool    m_clearResults;
     GLuint  m_program_indirect_compact;
     // 1 indirectSize per object, 
     Buffer  m_bufferObjectIndirects;

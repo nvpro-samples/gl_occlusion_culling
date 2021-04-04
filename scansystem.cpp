@@ -1,4 +1,4 @@
-/* Copyright (c) 2014-2018, NVIDIA CORPORATION. All rights reserved.
+/* Copyright (c) 2014-2021, NVIDIA CORPORATION. All rights reserved.
  *
  * Redistribution and use in source and binary forms, with or without
  * modification, are permitted provided that the following conditions
@@ -56,8 +56,8 @@ size_t ScanSystem::getOffsetSize(GLuint elements)
 bool ScanSystem::scanData( GLuint elements, const Buffer& input, const Buffer& output, const Buffer& offsets )
 {
   assert( (elements % 4) == 0 );
-  assert( elements < (GLuint64)BATCH_ELEMENTS*BATCH_ELEMENTS*BATCH_ELEMENTS);
-  assert( elements * sizeof(GLuint) <= input.size );
+  assert( size_t(elements) < (GLuint64)BATCH_ELEMENTS*BATCH_ELEMENTS*BATCH_ELEMENTS);
+  assert( size_t(elements) * sizeof(GLuint) <= size_t(input.size) );
   assert( input.size <= output.size );
 
   glUseProgram(programs.prefixsum);
@@ -78,7 +78,7 @@ bool ScanSystem::scanData( GLuint elements, const Buffer& input, const Buffer& o
     GLuint groupcombines = snapdiv(groups,BATCH_ELEMENTS);
 
     assert( groupcombines <= BATCH_ELEMENTS );
-    assert( getOffsetSize(elements) <= offsets.size);
+    assert( getOffsetSize(elements) <= size_t(offsets.size));
         
     glUseProgram(programs.offsets);
     glUniform1ui(0,elements);
@@ -120,7 +120,7 @@ bool ScanSystem::scanData( GLuint elements, const Buffer& input, const Buffer& o
 void ScanSystem::combineWithOffsets(GLuint elements, const Buffer& output, const Buffer& offsets )
 {
   //assert((elements % 4) == 0);
-  assert(elements * sizeof(GLuint) <= output.size);
+  assert(size_t(elements) * sizeof(GLuint) <= size_t(output.size));
 
   glUseProgram(programs.combine);
   glUniform1ui(0,elements);
