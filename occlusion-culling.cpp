@@ -792,8 +792,6 @@ bool Sample::begin()
     m_cullJobIndirect.m_bufferObjectIndirects    = CullingSystem::Buffer(buffers.scene_indirect);
     m_cullJobIndirect.m_bufferIndirectCounter    = CullingSystem::Buffer(buffers.cull_counter);
     m_cullJobIndirect.m_bufferIndirectResult     = CullingSystem::Buffer(buffers.cull_indirect);
-    // no need to clear results given the count buffer will only cause filled content to be rendered
-    m_cullJobIndirect.m_clearResults             = m_tweak.drawmode != DRAW_MULTIDRAWINDIRECT_COUNT;
 
     initCullingJob(m_cullJobToken);
     m_cullJobToken.program_cmds  = m_progManager.get(programs.token_cmds);
@@ -1494,6 +1492,9 @@ void Sample::think(double time)
   if(m_tweak.culling && !m_tweak.freeze)
   {
     m_cullJobReadback.m_hostVisBits = m_sceneVisBits.data();
+
+    // no need to clear results given the count buffer will only cause filled content to be rendered
+    m_cullJobIndirect.m_clearResults = m_tweak.drawmode != DRAW_MULTIDRAWINDIRECT_COUNT;
 
     // We change the output buffer for token emulation, as once the driver sees frequent readbacks on buffers
     // it moves the allocation to read-friendly memory. This would be bad for the native tokenbuffer.
