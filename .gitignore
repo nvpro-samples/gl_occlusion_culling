@@ -18,5 +18,5 @@ cmake_build
 build
 _install
 bin_x64
-shared_external
-shared_sources
+NVPRO_EXTERNAL
+nvpro_core
