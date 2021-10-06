@@ -19,17 +19,18 @@
 
 
 #version 440
-/**/
+#extension GL_ARB_shading_language_include : enable
+#include "cull-common.h"
 
-layout(binding=0,offset=0)uniform atomic_uint   cullCounterBuffer;
-layout(std430,binding=0)  writeonly buffer outputBuffer {
+layout(binding=CULLSYS_JOBIND_ATOM_COUNT,offset=0)uniform atomic_uint   cullCounterBuffer;
+layout(std430,binding=CULLSYS_JOBIND_SSBO_OUT)  writeonly buffer outputBuffer {
   int outcmds[];
 };
 
-layout(std430,binding=1)  readonly buffer inputBuffer {
+layout(std430,binding=CULLSYS_JOBIND_SSBO_IN)  readonly buffer inputBuffer {
   int incmds[];
 };
-layout(std430,binding=2)  readonly buffer visibleBuffer {
+layout(std430,binding=CULLSYS_JOBIND_SSBO_VIS)  readonly buffer visibleBuffer {
   int visibles[];
 };
 
