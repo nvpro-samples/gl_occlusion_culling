@@ -24,6 +24,11 @@
 #include <assert.h>
 #include <string.h>
 
+#include <nvmath/nvmath_glsltypes.h>
+#include "cull-common.h"
+
+static_assert(sizeof(CullingSystem::View) == sizeof(cullsys_glsl::ViewData), "ViewData glsl/c mismatch");
+
 #define DEBUG_VISIBLEBOXES  0
 
 inline unsigned int minDivide(unsigned int val, unsigned int alignment)
@@ -35,7 +40,6 @@ void CullingSystem::init( const Programs &programs, bool dualindex )
 {
   update(programs,dualindex);
   glGenFramebuffers(1,&m_fbo);
-  glCreateTextures(GL_TEXTURE_BUFFER,2,m_tbo);
   glGenBuffers(1, &m_ubo);
   glBindBuffer(GL_UNIFORM_BUFFER, m_ubo);
   glBufferData(GL_UNIFORM_BUFFER, sizeof(View), nullptr, GL_DYNAMIC_DRAW);
@@ -52,7 +56,6 @@ void CullingSystem::update( const Programs &programs, bool dualindex )
 void CullingSystem::deinit()
 {
   glDeleteFramebuffers(1,&m_fbo);
-  glDeleteTextures(2,m_tbo);
 }
 
 void CullingSystem::buildDepthMipmaps( GLuint textureDepth, int width, int height )
@@ -126,14 +129,11 @@ void CullingSystem::testBboxes( Job &job, bool raster )
   glEnableVertexAttribArray(2);
   glBindBuffer(GL_ARRAY_BUFFER, 0);
   
-  glActiveTexture(GL_TEXTURE0);
-  glBindTexture(GL_TEXTURE_BUFFER, m_tbo[0]);
-  job.m_bufferMatrices.TexBuffer(GL_TEXTURE_BUFFER,GL_RGBA32F);
+  job.m_bufferVisOutput.BindBufferRange(GL_SHADER_STORAGE_BUFFER, CULLSYS_SSBO_OUT_VIS);
 
+  job.m_bufferMatrices.BindBufferRange(GL_SHADER_STORAGE_BUFFER, CULLSYS_SSBO_MATRICES);
   if (m_dualindex){
-    glActiveTexture(GL_TEXTURE1);
-    glBindTexture(GL_TEXTURE_BUFFER, m_tbo[1]);
-    job.m_bufferBboxes.TexBuffer(GL_TEXTURE_BUFFER,GL_RGBA32F);
+    job.m_bufferBboxes.BindBufferRange(GL_SHADER_STORAGE_BUFFER, CULLSYS_SSBO_BBOXES);
   }
 
   if (raster){
@@ -147,7 +147,6 @@ void CullingSystem::testBboxes( Job &job, bool raster )
   }
   else {
     glEnable(GL_RASTERIZER_DISCARD);
-    job.m_bufferVisOutput.BindBufferRange(GL_SHADER_STORAGE_BUFFER,0);
   }
 
   glDrawArrays(GL_POINTS,0,job.m_numObjects);
@@ -165,12 +164,6 @@ void CullingSystem::testBboxes( Job &job, bool raster )
     glBindBufferBase(GL_SHADER_STORAGE_BUFFER,0,0);
     glDisable(GL_RASTERIZER_DISCARD);
   }
-
-  if (m_dualindex){
-    glBindTexture(GL_TEXTURE_BUFFER, 0);
-    glActiveTexture(GL_TEXTURE0);
-  }
-  glBindTexture(GL_TEXTURE_BUFFER, 0);
   
   glDisableVertexAttribArray(0);
   glDisableVertexAttribArray(1);
@@ -188,12 +181,7 @@ void CullingSystem::bitsFromOutput( Job &job, BitType type)
 
   glEnable(GL_RASTERIZER_DISCARD);
 
-  glBindBuffer(GL_ARRAY_BUFFER, job.m_bufferVisOutput.buffer);
-  for (int i = 0; i < 8; i++){
-    glVertexAttribIPointer(i, 4, GL_UNSIGNED_INT, sizeof(int)*32, (const void*)(i*sizeof(int)*4 + job.m_bufferVisOutput.offset));
-    glVertexAttribDivisor(i, 0);
-    glEnableVertexAttribArray(i);
-  }
+  job.m_bufferVisOutput.BindBufferRange(GL_SHADER_STORAGE_BUFFER, CULLSYS_BIT_SSBO_IN);
   
   if (type == BITS_CURRENT){
     glUseProgram(m_programs.bit_regular);
@@ -201,12 +189,10 @@ void CullingSystem::bitsFromOutput( Job &job, BitType type)
   else{
     glUseProgram(type == BITS_CURRENT_AND_LAST ? m_programs.bit_temporallast : m_programs.bit_temporalnew);
 
-    glBindBuffer(GL_ARRAY_BUFFER, job.m_bufferVisBitsLast.buffer);
-    glVertexAttribIPointer(9, 1, GL_UNSIGNED_INT, sizeof(int), (const void*)job.m_bufferVisBitsLast.offset);
-    glEnableVertexAttribArray(9);
+    job.m_bufferVisBitsLast.BindBufferRange(GL_SHADER_STORAGE_BUFFER, CULLSYS_BIT_SSBO_LAST);
   }
 
-  job.m_bufferVisBitsCurrent.BindBufferRange(GL_SHADER_STORAGE_BUFFER,0);
+  job.m_bufferVisBitsCurrent.BindBufferRange(GL_SHADER_STORAGE_BUFFER, CULLSYS_BIT_SSBO_OUT);
   glMemoryBarrier(GL_VERTEX_ATTRIB_ARRAY_BARRIER_BIT);
 
   glDrawArrays(GL_POINTS,0, minDivide(job.m_numObjects,32));
@@ -262,7 +248,7 @@ void CullingSystem::buildOutput( MethodType method, Job &job, const View& view )
   case METHOD_RASTER:
     {
       // clear visibles
-      job.m_bufferVisOutput.BindBufferRange(GL_SHADER_STORAGE_BUFFER,0);
+      job.m_bufferVisOutput.BindBufferRange(GL_SHADER_STORAGE_BUFFER, CULLSYS_SSBO_OUT_VIS);
       glClearBufferData(GL_SHADER_STORAGE_BUFFER, GL_R32UI,GL_RED_INTEGER,GL_UNSIGNED_INT,0);
 
       glUseProgram(m_programs.object_raster);

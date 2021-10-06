@@ -1,4 +1,3 @@
-#version 430
 /*
  * Copyright (c) 2014-2021, NVIDIA CORPORATION.  All rights reserved.
  *
@@ -18,36 +17,28 @@
  * SPDX-License-Identifier: Apache-2.0
  */
 
-#ifndef MATRIX_WORLD
-#define MATRIX_WORLD    0
-#endif
 
-#ifndef MATRIX_WORLD_IT
-#define MATRIX_WORLD_IT 1
-#endif
-
-#ifndef MATRICES
-#define MATRICES        2
-#endif
-
-const int CULL_SKIP_ID = ~0;
+#version 430
+#extension GL_ARB_shading_language_include : enable
+#include "cull-common.h"
 
 //////////////////////////////////////////////
 
-layout(binding=0, std140) uniform viewBuffer {
-  mat4    viewProjTM;
-  vec3    viewDir;
-  vec3    viewPos;
-  vec2    viewSize;
-  float   viewCullThreshold;
+layout(binding=CULLSYS_UBO_VIEW, std140) uniform viewBuffer {
+  ViewData view;
 };
 
-layout(binding=0) uniform samplerBuffer matricesTex;
+layout(binding=CULLSYS_SSBO_MATRICES, std430) readonly buffer matricesBuffer {
+  MatrixData matrices[];
+};
+
 #ifdef DUALINDEX
-layout(binding=1) uniform samplerBuffer bboxesTex;
+layout(binding=CULLSYS_SSBO_BBOXES, std430) readonly buffer bboxBuffer {
+  BboxData bboxes[];
+};
 #endif
 
-layout(std430,binding=0) buffer visibleBuffer {
+layout(std430,binding=CULLSYS_SSBO_OUT_VIS) writeonly buffer visibleBuffer {
   int visibles[];
 };
 
@@ -57,8 +48,8 @@ layout(std430,binding=0) buffer visibleBuffer {
 layout(location=0) in int  bboxIndex;
 layout(location=2) in int  matrixIndex;
 
-vec4 bboxMin = texelFetch(bboxesTex, bboxIndex*2+0);
-vec4 bboxMax = texelFetch(bboxesTex, bboxIndex*2+1);
+vec4 bboxMin = bboxes[bboxIndex].bboxMin;
+vec4 bboxMax = bboxes[bboxIndex].bboxMax;
 #else
 layout(location=0) in vec4 bboxMin;
 layout(location=1) in vec4 bboxMax;
@@ -71,58 +62,6 @@ out VertexOut{
   flat int matrixIndex;
   flat int objid;
 } OUT;
-
-//////////////////////////////////////////////
-
-vec4 getBoxCorner(int n)
-{
-#if 1
-  bvec3 useMax = bvec3((n & 1) != 0, (n & 2) != 0, (n & 4) != 0);
-  return vec4(mix(bboxMin.xyz, bboxMax.xyz, useMax),1);
-#else
-  switch(n){
-  case 0:
-    return vec4(bboxMin.x,bboxMin.y,bboxMin.z,1);
-  case 1:
-    return vec4(bboxMax.x,bboxMin.y,bboxMin.z,1);
-  case 2:
-    return vec4(bboxMin.x,bboxMax.y,bboxMin.z,1);
-  case 3:
-    return vec4(bboxMax.x,bboxMax.y,bboxMin.z,1);
-  case 4:
-    return vec4(bboxMin.x,bboxMin.y,bboxMax.z,1);
-  case 5:
-    return vec4(bboxMax.x,bboxMin.y,bboxMax.z,1);
-  case 6:
-    return vec4(bboxMin.x,bboxMax.y,bboxMax.z,1);
-  case 7:
-    return vec4(bboxMax.x,bboxMax.y,bboxMax.z,1);
-  }
-#endif
-}
-
-uint getCullBits(vec4 hPos)
-{
-  uint cullBits = 0;
-  cullBits |= hPos.x < -hPos.w ?  1 : 0;
-  cullBits |= hPos.x >  hPos.w ?  2 : 0;
-  cullBits |= hPos.y < -hPos.w ?  4 : 0;
-  cullBits |= hPos.y >  hPos.w ?  8 : 0;
-  cullBits |= hPos.z < -hPos.w ? 16 : 0;
-  cullBits |= hPos.z >  hPos.w ? 32 : 0;
-  cullBits |= hPos.w <= 0      ? 64 : 0; 
-  return cullBits;
-}
-
-vec3 projected(vec4 pos) {
-  return pos.xyz/pos.w;
-}
-
-bool pixelCull(vec3 clipmin, vec3 clipmax)
-{
-  vec2 dim = (clipmax.xy - clipmin.xy) * 0.5 * viewSize;
-  return max(dim.x, dim.y) < viewCullThreshold;
-}
 
 //////////////////////////////////////////////
 
@@ -141,14 +80,9 @@ void main()
   // side faces will be visible, must treat object as 
   // visible
   
-  int matindex = (matrixIndex * MATRICES + MATRIX_WORLD_IT) * 4;
-  mat4 worldInvTransTM = mat4(
-    texelFetch(matricesTex,matindex + 0),
-    texelFetch(matricesTex,matindex + 1),
-    texelFetch(matricesTex,matindex + 2),
-    texelFetch(matricesTex,matindex + 3));
+  mat4 worldInvTransTM = matrices[matrixIndex].worldInvTransTM;
     
-  vec3 objPos = (vec4(viewPos,1) * worldInvTransTM).xyz;
+  vec3 objPos = (vec4(view.viewPos,1) * worldInvTransTM).xyz;
   objPos -= ctr;
   if (all(lessThan(abs(objPos),dim))){
     // inside bbox
@@ -161,30 +95,25 @@ void main()
     // avoid loading data
     mat4 worldTM = inverse(transpose(worldInvTransTM));
   #else
-    int matindex2 = (matrixIndex * MATRICES + MATRIX_WORLD) * 4;
-    mat4 worldTM = mat4(
-      texelFetch(matricesTex,matindex + 0),
-      texelFetch(matricesTex,matindex + 1),
-      texelFetch(matricesTex,matindex + 2),
-      texelFetch(matricesTex,matindex + 3));
+    mat4 worldTM = matrices[matrixIndex].worldTM;
   #endif
-    mat4 worldViewProjTM = viewProjTM * worldTM;
+    mat4 worldViewProjTM = view.viewProjTM * worldTM;
   
     // frustum and pixel cull
-    vec4 hPos0    = worldViewProjTM * getBoxCorner(0);
+    vec4 hPos0    = worldViewProjTM * getBoxCorner(bboxMin, bboxMax, 0);
     vec3 clipmin  = projected(hPos0);
     vec3 clipmax  = clipmin;
     uint clipbits = getCullBits(hPos0);
 
     for (int n = 1; n < 8; n++){
-      vec4 hPos   = worldViewProjTM * getBoxCorner(n);
+      vec4 hPos   = worldViewProjTM * getBoxCorner(bboxMin, bboxMax, n);
       vec3 ab     = projected(hPos);
       clipmin = min(clipmin,ab);
       clipmax = max(clipmax,ab);
       clipbits &= getCullBits(hPos);
     }    
     
-    if (clipbits != 0 || pixelCull(clipmin, clipmax))
+    if (clipbits != 0 || pixelCull(view.viewSize, view.viewCullThreshold, clipmin, clipmax))
     {
       // invisible
       // skip rasterization of this box

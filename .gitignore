@@ -9,6 +9,7 @@
 *.sass
 *.sassbin
 *.bat
+*.glp
 
 #############################
 #specific to the project

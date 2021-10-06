@@ -1,4 +1,3 @@
-#version 430
 /*
  * Copyright (c) 2014-2021, NVIDIA CORPORATION.  All rights reserved.
  *
@@ -18,17 +17,9 @@
  * SPDX-License-Identifier: Apache-2.0
  */
 
-#ifndef MATRIX_WORLD
-#define MATRIX_WORLD    0
-#endif
-
-#ifndef MATRIX_WORLD_IT
-#define MATRIX_WORLD_IT 1
-#endif
-
-#ifndef MATRICES
-#define MATRICES        2
-#endif
+#version 430
+#extension GL_ARB_shading_language_include : enable
+#include "cull-common.h"
 
 #ifndef FLIPWIND
 #define FLIPWIND        1
@@ -38,19 +29,15 @@
 #define PERSPECTIVE     1
 #endif
 
-const int CULL_SKIP_ID = ~0;
-
 //////////////////////////////////////////////
 
-layout(binding=0, std140) uniform viewBuffer {
-  mat4    viewProjTM;
-  vec3    viewDir;
-  vec3    viewPos;
-  vec2    viewSize;
-  float   viewCullThreshold;
+layout(binding=CULLSYS_UBO_VIEW, std140) uniform viewBuffer {
+  ViewData  view;
 };
 
-layout(binding=0) uniform samplerBuffer matricesTex;
+layout(binding=CULLSYS_SSBO_MATRICES, std430) readonly buffer matricesBuffer {
+  MatrixData matrices[];
+};
 
 /////////////////////////////////////////////
 
@@ -79,12 +66,7 @@ void main()
 {
   if (IN[0].objid == CULL_SKIP_ID) return;
 
-  int  matindex = (IN[0].matrixIndex*MATRICES + MATRIX_WORLD)*4;
-  mat4 worldTM = mat4(
-    texelFetch(matricesTex,matindex + 0),
-    texelFetch(matricesTex,matindex + 1),
-    texelFetch(matricesTex,matindex + 2),
-    texelFetch(matricesTex,matindex + 3));
+  mat4 worldTM = matrices[IN[0].matrixIndex].worldTM;
 
   vec3 faceNormal = vec3(0);
   vec3 edgeBasis0 = vec3(0);
@@ -119,7 +101,7 @@ void main()
   float proj = gl_InvocationID < 3 ? 1 : -1;
 #else
   vec3 worldNormal = mat3(worldTM) * faceNormal;
-  float proj = sign(dot(viewDir,worldNormal));
+  float proj = sign(dot(view.viewDir,worldNormal));
 #endif
   
 #if FLIPWIND
@@ -135,36 +117,36 @@ void main()
   
 #if FLIPWIND
   objid = IN[0].objid;
-  gl_Position = viewProjTM * vec4(worldCtr + (faceNormal - edgeBasis0 - edgeBasis1),1);
+  gl_Position = view.viewProjTM * vec4(worldCtr + (faceNormal - edgeBasis0 - edgeBasis1),1);
   EmitVertex();
   
   objid = IN[0].objid;
-  gl_Position = viewProjTM * vec4(worldCtr + (faceNormal + edgeBasis0 - edgeBasis1),1);
+  gl_Position = view.viewProjTM * vec4(worldCtr + (faceNormal + edgeBasis0 - edgeBasis1),1);
   EmitVertex();
   
   objid = IN[0].objid;
-  gl_Position = viewProjTM * vec4(worldCtr + (faceNormal - edgeBasis0 + edgeBasis1),1);
+  gl_Position = view.viewProjTM * vec4(worldCtr + (faceNormal - edgeBasis0 + edgeBasis1),1);
   EmitVertex();
   
   objid = IN[0].objid;
-  gl_Position = viewProjTM * vec4(worldCtr + (faceNormal + edgeBasis0 + edgeBasis1),1);
+  gl_Position = view.viewProjTM * vec4(worldCtr + (faceNormal + edgeBasis0 + edgeBasis1),1);
   EmitVertex();
   
 #else
   objid = IN[0].objid;
-  gl_Position = viewProjTM * vec4(worldCtr + (faceNormal - edgeBasis0 - edgeBasis1),1);
+  gl_Position = view.viewProjTM * vec4(worldCtr + (faceNormal - edgeBasis0 - edgeBasis1),1);
   EmitVertex();
   
   objid = IN[0].objid;
-  gl_Position = viewProjTM * vec4(worldCtr + (faceNormal - edgeBasis0 + edgeBasis1),1);
+  gl_Position = view.viewProjTM * vec4(worldCtr + (faceNormal - edgeBasis0 + edgeBasis1),1);
   EmitVertex();
   
   objid = IN[0].objid;
-  gl_Position = viewProjTM * vec4(worldCtr + (faceNormal + edgeBasis0 - edgeBasis1),1);
+  gl_Position = view.viewProjTM * vec4(worldCtr + (faceNormal + edgeBasis0 - edgeBasis1),1);
   EmitVertex();
   
   objid = IN[0].objid;
-  gl_Position = viewProjTM * vec4(worldCtr + (faceNormal + edgeBasis0 + edgeBasis1),1);
+  gl_Position = view.viewProjTM * vec4(worldCtr + (faceNormal + edgeBasis0 + edgeBasis1),1);
   EmitVertex();
 #endif
   

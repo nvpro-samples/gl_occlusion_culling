@@ -257,7 +257,6 @@ private:
 
   GLuint    m_ubo;
   GLuint    m_fbo;
-  GLuint    m_tbo[2];
   bool      m_dualindex;
   bool      m_useRepesentativeTest;
 };

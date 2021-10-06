@@ -89,5 +89,6 @@ endforeach(RELEASELIB)
 #
 _finalize_target( ${PROJNAME} )
 LIST(APPEND GLSL_FILES "common.h")
+LIST(APPEND GLSL_FILES "cull-common.h")
 install(FILES ${GLSL_FILES} CONFIGURATIONS Release DESTINATION "bin_${ARCH}/GLSL_${PROJNAME}")
 install(FILES ${GLSL_FILES} CONFIGURATIONS Debug DESTINATION "bin_${ARCH}_debug/GLSL_${PROJNAME}")

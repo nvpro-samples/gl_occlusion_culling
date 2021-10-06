@@ -18,13 +18,13 @@
  */
 
 
-
 #version 430
-/**/
+#extension GL_ARB_shading_language_include : enable
+#include "cull-common.h"
 
 layout(early_fragment_tests) in;
 
-layout(std430,binding=0) buffer visibleBuffer {
+layout(std430,binding=CULLSYS_SSBO_OUT_VIS) buffer visibleBuffer {
   int visibles[];
 };
 

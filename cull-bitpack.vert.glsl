@@ -20,7 +20,8 @@
 
 
 #version 430
-/**/
+#extension GL_ARB_shading_language_include : enable
+#include "cull-common.h"
 
 #define TEMPORAL_LAST 1
 #define TEMPORAL_NEW  2
@@ -29,13 +30,17 @@
 #define TEMPORAL 0
 #endif
 
-layout(location=0) in uvec4 instream[8];
+layout(std430,binding=CULLSYS_BIT_SSBO_IN)  readonly buffer inputBuffer {
+  uvec4 instream[];
+};
 
 #if TEMPORAL
-layout(location=9) in uint last;
+layout(std430,binding=CULLSYS_BIT_SSBO_LAST)  readonly buffer lastBuffer {
+  uint lasts[];
+};
 #endif
 
-layout(std430,binding=0)  writeonly buffer outputBuffer {
+layout(std430,binding=CULLSYS_BIT_SSBO_OUT)  writeonly buffer outputBuffer {
   uint outstream[];
 };
 
@@ -44,11 +49,16 @@ void main ()
   uint bits = 0u;
   int outbit = 0;
   for (int i = 0; i < 8; i++){
+    uvec4 inbytes4 = instream[gl_VertexID * 8 + i];
     for (int n = 0; n < 4; n++, outbit++){
-      uint checkbytes = instream[i][n];
+      uint checkbytes = inbytes4[n];
       bits |= (checkbytes & 1u) << outbit;
     }
   }
+  
+#if TEMPORAL
+  uint last = lasts[gl_VertexID];
+#endif
   
 #if TEMPORAL == TEMPORAL_LAST
   // render what was visible in last frame and passes current test
