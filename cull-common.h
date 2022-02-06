@@ -108,7 +108,15 @@ struct ViewData {
 #define CULLSYS_BIT_SSBO_IN      1
 #define CULLSYS_BIT_SSBO_LAST    2
 
-#define CULLSYS_JOBIND_ATOM_COUNT 0
-#define CULLSYS_JOBIND_SSBO_OUT   0
-#define CULLSYS_JOBIND_SSBO_IN    1
-#define CULLSYS_JOBIND_SSBO_VIS   2
+#define CULLSYS_JOBIND_SSBO_COUNT 0
+#define CULLSYS_JOBIND_SSBO_OUT   1
+#define CULLSYS_JOBIND_SSBO_IN    2
+#define CULLSYS_JOBIND_SSBO_VIS   3
+
+// how many cmds per thread are processed
+// at high rejection rates 32 is faster
+// 1 or 32
+#define CULLSYS_JOBIND_BATCH      1
+
+#define CULLSYS_COMPUTE_THREADS   64
+

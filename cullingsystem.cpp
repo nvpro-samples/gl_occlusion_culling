@@ -171,15 +171,7 @@ void CullingSystem::testBboxes( Job &job, bool raster )
 
 void CullingSystem::bitsFromOutput( Job &job, BitType type)
 {
-  // for GL 3.3 compatibility we use xfb
-  // in GL 4.3 SSBO is used
-  // 
-  // using compute instead of "invisible" point drawing
-  // would be better if we had really huge thread counts
-
-  glBindBuffer(GL_ARRAY_BUFFER, 0);
-
-  glEnable(GL_RASTERIZER_DISCARD);
+	glBindBuffer(GL_ARRAY_BUFFER, 0);
 
   job.m_bufferVisOutput.BindBufferRange(GL_SHADER_STORAGE_BUFFER, CULLSYS_BIT_SSBO_IN);
   
@@ -193,15 +185,14 @@ void CullingSystem::bitsFromOutput( Job &job, BitType type)
   }
 
   job.m_bufferVisBitsCurrent.BindBufferRange(GL_SHADER_STORAGE_BUFFER, CULLSYS_BIT_SSBO_OUT);
-  glMemoryBarrier(GL_VERTEX_ATTRIB_ARRAY_BARRIER_BIT);
+  glMemoryBarrier(GL_SHADER_STORAGE_BARRIER_BIT);
 
-  glDrawArrays(GL_POINTS,0, minDivide(job.m_numObjects,32));
+  glUniform1ui(0,job.m_numObjects);
+  glDispatchCompute( minDivide(minDivide(job.m_numObjects,32), CULLSYS_COMPUTE_THREADS), 1, 1);
 
   glBindBufferBase(GL_SHADER_STORAGE_BUFFER, CULLSYS_BIT_SSBO_IN, 0);
   glBindBufferBase(GL_SHADER_STORAGE_BUFFER, CULLSYS_BIT_SSBO_LAST, 0);
   glBindBufferBase(GL_SHADER_STORAGE_BUFFER, CULLSYS_BIT_SSBO_OUT, 0);
-
-  glDisable(GL_RASTERIZER_DISCARD);
 }
 
 void CullingSystem::resultFromBits( Job &job )
@@ -273,12 +264,10 @@ void CullingSystem::swapBits( Job &job )
 
 void CullingSystem::JobIndirectUnordered::resultFromBits( const Buffer& bufferVisBitsCurrent )
 {
-  glEnable(GL_RASTERIZER_DISCARD);
-
   glUseProgram(m_program_indirect_compact);
 
-  m_bufferIndirectCounter.BindBufferRange(GL_ATOMIC_COUNTER_BUFFER, CULLSYS_JOBIND_ATOM_COUNT);
-  m_bufferIndirectCounter.ClearBufferSubData (GL_ATOMIC_COUNTER_BUFFER, GL_R32UI, GL_RED_INTEGER, GL_UNSIGNED_INT, 0);
+  m_bufferIndirectCounter.BindBufferRange(GL_SHADER_STORAGE_BUFFER, CULLSYS_JOBIND_SSBO_COUNT);
+  m_bufferIndirectCounter.ClearBufferSubData (GL_SHADER_STORAGE_BUFFER, GL_R32UI, GL_RED_INTEGER, GL_UNSIGNED_INT, 0);
 
   bufferVisBitsCurrent.   BindBufferRange(GL_SHADER_STORAGE_BUFFER, CULLSYS_JOBIND_SSBO_VIS);
   m_bufferObjectIndirects.BindBufferRange(GL_SHADER_STORAGE_BUFFER, CULLSYS_JOBIND_SSBO_IN);
@@ -289,10 +278,10 @@ void CullingSystem::JobIndirectUnordered::resultFromBits( const Buffer& bufferVi
   }
 
   glMemoryBarrier(GL_SHADER_STORAGE_BARRIER_BIT);
-  glDrawArrays(GL_POINTS,0,m_numObjects);
+  glUniform1ui(0, m_numObjects);
+  glDispatchCompute(minDivide(minDivide(m_numObjects,CULLSYS_JOBIND_BATCH), CULLSYS_COMPUTE_THREADS), 1, 1);
 
-  glDisable(GL_RASTERIZER_DISCARD);
-  glBindBufferBase  (GL_ATOMIC_COUNTER_BUFFER, CULLSYS_JOBIND_ATOM_COUNT, 0);
+  glBindBufferBase  (GL_SHADER_STORAGE_BUFFER, CULLSYS_JOBIND_SSBO_COUNT, 0);
   glBindBufferBase  (GL_SHADER_STORAGE_BUFFER, CULLSYS_JOBIND_SSBO_OUT, 0);
   glBindBufferBase  (GL_SHADER_STORAGE_BUFFER, CULLSYS_JOBIND_SSBO_IN, 0);
   glBindBufferBase  (GL_SHADER_STORAGE_BUFFER, CULLSYS_JOBIND_SSBO_VIS, 0);

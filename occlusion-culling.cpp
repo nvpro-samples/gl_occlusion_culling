@@ -332,14 +332,14 @@ bool Sample::initProgram()
       nvgl::ProgramManager::Definition(GL_VERTEX_SHADER, "#define OCCLUSION\n", "cull-basic.vert.glsl"));
 
   programs.bit_regular = m_progManager.createProgram(
-      nvgl::ProgramManager::Definition(GL_VERTEX_SHADER, "#define TEMPORAL 0\n", "cull-bitpack.vert.glsl"));
+      nvgl::ProgramManager::Definition(GL_COMPUTE_SHADER, "#define TEMPORAL 0\n", "cull-bitpack.comp.glsl"));
   programs.bit_temporallast = m_progManager.createProgram(
-      nvgl::ProgramManager::Definition(GL_VERTEX_SHADER, "#define TEMPORAL TEMPORAL_LAST\n", "cull-bitpack.vert.glsl"));
+      nvgl::ProgramManager::Definition(GL_COMPUTE_SHADER, "#define TEMPORAL TEMPORAL_LAST\n", "cull-bitpack.comp.glsl"));
   programs.bit_temporalnew = m_progManager.createProgram(
-      nvgl::ProgramManager::Definition(GL_VERTEX_SHADER, "#define TEMPORAL TEMPORAL_NEW\n", "cull-bitpack.vert.glsl"));
+      nvgl::ProgramManager::Definition(GL_COMPUTE_SHADER, "#define TEMPORAL TEMPORAL_NEW\n", "cull-bitpack.comp.glsl"));
 
   programs.indirect_unordered = m_progManager.createProgram(
-      nvgl::ProgramManager::Definition(GL_VERTEX_SHADER, "cull-indirectunordered.vert.glsl"));
+      nvgl::ProgramManager::Definition(GL_COMPUTE_SHADER, "cull-indirectunordered.comp.glsl"));
 
   programs.depth_mips =
       m_progManager.createProgram(nvgl::ProgramManager::Definition(GL_VERTEX_SHADER, "cull-downsample.vert.glsl"),
@@ -1097,7 +1097,7 @@ void Sample::drawScene(bool depthonly, const char* what)
     }
     if(m_statsPrint)
     {
-      LOGI("%s visible: %d pct\n", what, (visible * 100) / (int)m_sceneCmds.size());
+      LOGI("%s visible: %d pct, %d\n", what, (visible * 100) / (int)m_sceneCmds.size(), visible);
     }
   }
 
@@ -1174,6 +1174,14 @@ void Sample::drawCullingTemporal(CullingSystem::Job& cullJob)
         m_cullSys.resultFromBits(cullJob);
         m_cullSys.resultClient(cullJob);
 
+
+      }
+
+      glBindFramebuffer(GL_FRAMEBUFFER, fbos.scene);
+      drawScene(false, "New");
+
+      {
+        NV_PROFILE_GL_SECTION("CullN");
         // for next frame
         m_cullSys.bitsFromOutput(cullJob, CullingSystem::BITS_CURRENT);
 #if CULL_TEMPORAL_NOFRUSTUM
@@ -1181,9 +1189,6 @@ void Sample::drawCullingTemporal(CullingSystem::Job& cullJob)
 #endif
         m_cullSys.swapBits(cullJob);  // last/output
       }
-
-      glBindFramebuffer(GL_FRAMEBUFFER, fbos.scene);
-      drawScene(false, "New");
     }
     break;
     case CullingSystem::METHOD_RASTER: {
@@ -1205,7 +1210,12 @@ void Sample::drawCullingTemporal(CullingSystem::Job& cullJob)
         m_cullSys.bitsFromOutput(cullJob, CullingSystem::BITS_CURRENT_AND_NOT_LAST);
         m_cullSys.resultFromBits(cullJob);
         m_cullSys.resultClient(cullJob);
+      }
 
+      drawScene(false, "New");
+
+      {
+        NV_PROFILE_GL_SECTION("CullN");
         // for next frame
         m_cullSys.bitsFromOutput(cullJob, CullingSystem::BITS_CURRENT);
 #if CULL_TEMPORAL_NOFRUSTUM
@@ -1213,8 +1223,6 @@ void Sample::drawCullingTemporal(CullingSystem::Job& cullJob)
 #endif
         m_cullSys.swapBits(cullJob);  // last/output
       }
-
-      drawScene(false, "New");
     }
     break;
   }

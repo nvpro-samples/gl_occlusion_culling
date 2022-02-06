@@ -23,12 +23,17 @@
 #extension GL_ARB_shading_language_include : enable
 #include "cull-common.h"
 
+layout(local_size_x=CULLSYS_COMPUTE_THREADS) in;
+
 #define TEMPORAL_LAST 1
 #define TEMPORAL_NEW  2
 
 #ifndef TEMPORAL
 #define TEMPORAL 0
 #endif
+
+
+layout(location=0) uniform uint numObjects;
 
 layout(std430,binding=CULLSYS_BIT_SSBO_IN)  readonly buffer inputBuffer {
   uvec4 instream[];
@@ -44,20 +49,26 @@ layout(std430,binding=CULLSYS_BIT_SSBO_OUT)  writeonly buffer outputBuffer {
   uint outstream[];
 };
 
+
 void main ()
 {
+  uint streamMax    = (numObjects - 1 + 31) / 32;
+  uint globalThreadID = gl_GlobalInvocationID.x;
+
   uint bits = 0u;
   int outbit = 0;
   for (int i = 0; i < 8; i++){
-    uvec4 inbytes4 = instream[gl_VertexID * 8 + i];
+    uvec4 inbytes4 = instream[min(globalThreadID,streamMax) * 8 + i];
     for (int n = 0; n < 4; n++, outbit++){
       uint checkbytes = inbytes4[n];
       bits |= (checkbytes & 1u) << outbit;
     }
   }
   
+  if (globalThreadID > streamMax) return;
+  
 #if TEMPORAL
-  uint last = lasts[gl_VertexID];
+  uint last = lasts[globalThreadID];
 #endif
   
 #if TEMPORAL == TEMPORAL_LAST
@@ -68,5 +79,5 @@ void main ()
   bits &= (~last);
 #endif
 
-  outstream[gl_VertexID] = bits;
+  outstream[globalThreadID] = bits;
 }
