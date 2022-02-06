@@ -1156,9 +1156,12 @@ void Sample::drawCullingTemporal(CullingSystem::Job& cullJob)
 #if !CULL_TEMPORAL_NOFRUSTUM
         m_cullSys.buildOutput(CullingSystem::METHOD_FRUSTUM, cullJob, view);
         m_cullSys.bitsFromOutput(cullJob, CullingSystem::BITS_CURRENT_AND_LAST);
-        m_cullSys.resultFromBits(cullJob);
 #endif
+        m_cullSys.resultFromBits(cullJob);
         m_cullSys.resultClient(cullJob);
+#if CULL_TEMPORAL_NOFRUSTUM
+        m_cullSys.swapBits(cullJob);  // last/output
+#endif
       }
 
       drawScene(false, "Last");
@@ -1174,21 +1177,15 @@ void Sample::drawCullingTemporal(CullingSystem::Job& cullJob)
         m_cullSys.resultFromBits(cullJob);
         m_cullSys.resultClient(cullJob);
 
-
+        // for next frame
+        m_cullSys.bitsFromOutput(cullJob, CullingSystem::BITS_CURRENT);
+#if !CULL_TEMPORAL_NOFRUSTUM
+        m_cullSys.swapBits(cullJob);  // last/output
+#endif
       }
 
       glBindFramebuffer(GL_FRAMEBUFFER, fbos.scene);
       drawScene(false, "New");
-
-      {
-        NV_PROFILE_GL_SECTION("CullN");
-        // for next frame
-        m_cullSys.bitsFromOutput(cullJob, CullingSystem::BITS_CURRENT);
-#if CULL_TEMPORAL_NOFRUSTUM
-        m_cullSys.resultFromBits(cullJob);
-#endif
-        m_cullSys.swapBits(cullJob);  // last/output
-      }
     }
     break;
     case CullingSystem::METHOD_RASTER: {
@@ -1197,9 +1194,12 @@ void Sample::drawCullingTemporal(CullingSystem::Job& cullJob)
 #if !CULL_TEMPORAL_NOFRUSTUM
         m_cullSys.buildOutput(CullingSystem::METHOD_FRUSTUM, cullJob, view);
         m_cullSys.bitsFromOutput(cullJob, CullingSystem::BITS_CURRENT_AND_LAST);
-        m_cullSys.resultFromBits(cullJob);
 #endif
+        m_cullSys.resultFromBits(cullJob);
         m_cullSys.resultClient(cullJob);
+#if CULL_TEMPORAL_NOFRUSTUM
+        m_cullSys.swapBits(cullJob);  // last/output
+#endif
       }
 
       drawScene(false, "Last");
@@ -1210,19 +1210,15 @@ void Sample::drawCullingTemporal(CullingSystem::Job& cullJob)
         m_cullSys.bitsFromOutput(cullJob, CullingSystem::BITS_CURRENT_AND_NOT_LAST);
         m_cullSys.resultFromBits(cullJob);
         m_cullSys.resultClient(cullJob);
+
+        // for next frame
+        m_cullSys.bitsFromOutput(cullJob, CullingSystem::BITS_CURRENT);
+#if !CULL_TEMPORAL_NOFRUSTUM
+        m_cullSys.swapBits(cullJob);  // last/output
+#endif
       }
 
       drawScene(false, "New");
-
-      {
-        NV_PROFILE_GL_SECTION("CullN");
-        // for next frame
-        m_cullSys.bitsFromOutput(cullJob, CullingSystem::BITS_CURRENT);
-#if CULL_TEMPORAL_NOFRUSTUM
-        m_cullSys.resultFromBits(cullJob);
-#endif
-        m_cullSys.swapBits(cullJob);  // last/output
-      }
     }
     break;
   }
