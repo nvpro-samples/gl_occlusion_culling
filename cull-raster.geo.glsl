@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2014-2021, NVIDIA CORPORATION.  All rights reserved.
+ * Copyright (c) 2014-2022, NVIDIA CORPORATION.  All rights reserved.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -13,7 +13,7 @@
  * See the License for the specific language governing permissions and
  * limitations under the License.
  *
- * SPDX-FileCopyrightText: Copyright (c) 2014-2021 NVIDIA CORPORATION
+ * SPDX-FileCopyrightText: Copyright (c) 2014-2022 NVIDIA CORPORATION
  * SPDX-License-Identifier: Apache-2.0
  */
 
@@ -23,10 +23,6 @@
 
 #ifndef FLIPWIND
 #define FLIPWIND        1
-#endif
-
-#ifndef PERSPECTIVE
-#define PERSPECTIVE     1
 #endif
 
 //////////////////////////////////////////////
@@ -41,21 +37,16 @@ layout(binding=CULLSYS_SSBO_MATRICES, std430) readonly buffer matricesBuffer {
 
 /////////////////////////////////////////////
 
-#if PERSPECTIVE
-  // not so trivial to find the 3 visible sides, let hw do the culling
-  layout(points,invocations=6) in;  
-#else
-  // render the 3 visible sides based on view direction and box normal
-  layout(points,invocations=3) in;  
-#endif
+layout(points,invocations=3) in;
+
 // one side each invocation
 layout(triangle_strip,max_vertices=4) out;
 
 in VertexOut{
   vec3 bboxCtr;
   vec3 bboxDim;
-  flat int matrixIndex;
-  flat int objid;
+  flat uint direction_matrixIndex;
+  flat int  objid;
 } IN[1];
 
 flat out int objid;
@@ -65,18 +56,17 @@ flat out int objid;
 void main()
 {
   if (IN[0].objid == CULL_SKIP_ID) return;
+  
+  uint directionIndex = IN[0].direction_matrixIndex;
+  uint matrixIndex    = IN[0].direction_matrixIndex >> 3;
 
-  mat4 worldTM = matrices[IN[0].matrixIndex].worldTM;
+  mat4 worldTM = matrices[matrixIndex].worldTM;
 
   vec3 faceNormal = vec3(0);
   vec3 edgeBasis0 = vec3(0);
   vec3 edgeBasis1 = vec3(0);
   
-#if PERSPECTIVE
-  int id = gl_InvocationID % 3;
-#else
   int id = gl_InvocationID;
-#endif
 
   if (id == 0)
   {
@@ -97,14 +87,9 @@ void main()
       edgeBasis1.y = IN[0].bboxDim.y;
   }
   
-#if PERSPECTIVE
-  float proj = gl_InvocationID < 3 ? 1 : -1;
-#else
-  vec3 worldNormal = mat3(worldTM) * faceNormal;
-  float proj = sign(dot(view.viewDir,worldNormal));
-#endif
+  float proj = ((directionIndex & (1<<id)) != 0) ? 1 : -1;  
   
-#if FLIPWIND
+#if !FLIPWIND
   proj *= -1;
 #endif
   

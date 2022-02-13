@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2014-2021, NVIDIA CORPORATION.  All rights reserved.
+ * Copyright (c) 2014-2022, NVIDIA CORPORATION.  All rights reserved.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -13,7 +13,7 @@
  * See the License for the specific language governing permissions and
  * limitations under the License.
  *
- * SPDX-FileCopyrightText: Copyright (c) 2014-2021 NVIDIA CORPORATION
+ * SPDX-FileCopyrightText: Copyright (c) 2014-2022 NVIDIA CORPORATION
  * SPDX-License-Identifier: Apache-2.0
  */
 
@@ -28,12 +28,15 @@ layout(std430,binding=CULLSYS_SSBO_OUT_VIS) buffer visibleBuffer {
   int visibles[];
 };
 
+#if CULLSYS_DEBUG_VISIBLEBOXES
 layout(location=0,index=0) out vec4 out_Color;
+#endif
 
 flat in int objid;
 
 void main (){
   visibles[objid] = 1;
-  
-  out_Color = unpackUnorm4x8(uint(objid));
+#if CULLSYS_DEBUG_VISIBLEBOXES
+  out_Color = unpackUnorm4x8(uint(objid) ^ uint(objid << 4));
+#endif
 }

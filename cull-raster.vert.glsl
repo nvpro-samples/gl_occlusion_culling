@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2014-2021, NVIDIA CORPORATION.  All rights reserved.
+ * Copyright (c) 2014-2022, NVIDIA CORPORATION.  All rights reserved.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -13,7 +13,7 @@
  * See the License for the specific language governing permissions and
  * limitations under the License.
  *
- * SPDX-FileCopyrightText: Copyright (c) 2014-2021 NVIDIA CORPORATION
+ * SPDX-FileCopyrightText: Copyright (c) 2014-2022 NVIDIA CORPORATION
  * SPDX-License-Identifier: Apache-2.0
  */
 
@@ -59,8 +59,8 @@ layout(location=2) in int  matrixIndex;
 out VertexOut{
   vec3 bboxCtr;
   vec3 bboxDim;
-  flat int matrixIndex;
-  flat int objid;
+  flat uint direction_matrixIndex;
+  flat int  objid;
 } OUT;
 
 //////////////////////////////////////////////
@@ -70,10 +70,10 @@ void main()
   int objid = gl_VertexID;
   vec3 ctr =((bboxMin + bboxMax)*0.5).xyz;
   vec3 dim =((bboxMax - bboxMin)*0.5).xyz;
-  OUT.bboxCtr = ctr;
-  OUT.bboxDim = dim;
-  OUT.matrixIndex = matrixIndex;
-  OUT.objid = objid;
+  OUT.bboxCtr               = ctr;
+  OUT.bboxDim               = dim;
+  OUT.direction_matrixIndex = uint(matrixIndex) << 3;
+  OUT.objid                 = objid;
   
   
   // if camera is inside the bbox then none of our
@@ -82,22 +82,24 @@ void main()
   
   mat4 worldInvTransTM = matrices[matrixIndex].worldInvTransTM;
     
-  vec3 objPos = (vec4(view.viewPos,1) * worldInvTransTM).xyz;
-  objPos -= ctr;
-  if (all(lessThan(abs(objPos),dim))){
+  vec3 localViewPos = (vec4(view.viewPos,1) * worldInvTransTM).xyz;
+  localViewPos -= ctr;
+  if (all(lessThan(abs(localViewPos),dim))){
     // inside bbox
     visibles[objid] = 1;
     // skip rasterization of this box
     OUT.objid = CULL_SKIP_ID;
   }
   else {
+  // this could be disabled if you don't need it
   #if 1
-    // avoid loading data
-    mat4 worldTM = inverse(transpose(worldInvTransTM));
-  #else
-    mat4 worldTM = matrices[matrixIndex].worldTM;
-  #endif
-    mat4 worldViewProjTM = view.viewProjTM * worldTM;
+    #if 1
+      // avoid loading data again (for precision you might prefer below)
+      mat4 worldTM = inverse(transpose(worldInvTransTM));
+    #else
+      mat4 worldTM = matrices[matrixIndex].worldTM;
+    #endif
+      mat4 worldViewProjTM = view.viewProjTM * worldTM;
   
     // frustum and pixel cull
     vec4 hPos0    = worldViewProjTM * getBoxCorner(bboxMin, bboxMax, 0);
@@ -118,6 +120,17 @@ void main()
       // invisible
       // skip rasterization of this box
       OUT.objid = CULL_SKIP_ID;
+    }
+    else 
+  #endif
+    {
+      // localViewPos is local to the bbox, and allows us to compute the relative direction
+      // vector of the camera to the center of the bbox.
+      // This way we can figure out which of the 3 sides of the bbox are visible
+      
+      OUT.direction_matrixIndex  |= localViewPos.x > 0 ? 1 : 0;
+      OUT.direction_matrixIndex  |= localViewPos.y > 0 ? 2 : 0;
+      OUT.direction_matrixIndex  |= localViewPos.z > 0 ? 4 : 0;
     }
   }
 }

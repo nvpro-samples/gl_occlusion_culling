@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2021, NVIDIA CORPORATION.  All rights reserved.
+ * Copyright (c) 2021-2022, NVIDIA CORPORATION.  All rights reserved.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -13,7 +13,7 @@
  * See the License for the specific language governing permissions and
  * limitations under the License.
  *
- * SPDX-FileCopyrightText: Copyright (c) 2021 NVIDIA CORPORATION
+ * SPDX-FileCopyrightText: Copyright (c) 2021-2022 NVIDIA CORPORATION
  * SPDX-License-Identifier: Apache-2.0
  */
 
@@ -98,11 +98,13 @@ struct ViewData {
   }
 #endif
 
-#define CULLSYS_UBO_VIEW         0
-#define CULLSYS_SSBO_OUT_VIS     0
-#define CULLSYS_SSBO_MATRICES    1
-#define CULLSYS_SSBO_BBOXES      2
-#define CULLSYS_TEX_DEPTH        0
+#define CULLSYS_UBO_VIEW            0
+#define CULLSYS_SSBO_OUT_VIS        0
+#define CULLSYS_SSBO_MATRICES       1
+#define CULLSYS_SSBO_BBOXES         2
+#define CULLSYS_SSBO_INPUT_BBOX     3
+#define CULLSYS_SSBO_INPUT_MATRIX   4
+#define CULLSYS_TEX_DEPTH           0
 
 #define CULLSYS_BIT_SSBO_OUT     0
 #define CULLSYS_BIT_SSBO_IN      1
@@ -116,7 +118,16 @@ struct ViewData {
 // how many cmds per thread are processed
 // at high rejection rates 32 is faster
 // 1 or 32
-#define CULLSYS_JOBIND_BATCH      1
+#define CULLSYS_JOBIND_BATCH          1
 
-#define CULLSYS_COMPUTE_THREADS   64
+#define CULLSYS_COMPUTE_THREADS       64
 
+// the instanced renderer uses pre-computed uint16_t index buffer for bboxes
+// uint16_t indices provide extra performance on current NVIDIA hardware
+#define CULLSYS_INSTANCED_VERTICES    8
+#define CULLSYS_INSTANCED_TRIANGLES   6
+#define CULLSYS_INSTANCED_INDICES     (CULLSYS_INSTANCED_TRIANGLES * 3)
+#define CULLSYS_INSTANCED_BBOXES      (0x10000 / CULLSYS_INSTANCED_VERTICES)
+
+// for debugging
+#define CULLSYS_DEBUG_VISIBLEBOXES    0
