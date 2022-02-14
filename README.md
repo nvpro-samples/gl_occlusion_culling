@@ -16,13 +16,19 @@ All culling algorithms have in common that they test all the scene's bounding bo
 The culling itself is implemented in the *cullingsystem.cpp/hpp* files. It uses SSBO to store the results. The results are always packed into bit-arrays to minimize traffic in the read-back case and maximize cache hits.
 
 - **Frustum:**
- Just a simple frustum culling approach, this could probably done efficiently on the CPU using SIMD as well.
+  Just a simple frustum culling approach, this could probably done efficiently on the CPU using SIMD as well.
 
 - **HiZ (occlusion):**
- This technique generates a mip-map chain of the depth buffer, and then checks the bounding box against the proper LOD. The LOD is chosen based on the area of the bounding box in screenspace. The core pinciple of the technique is also described [here](http://rastergrid.com/blog/2010/10/hierarchical-z-map-based-occlusion-culling/)
+  This technique generates a mip-map chain of the depth buffer, and then checks the bounding box against the proper LOD. The LOD is chosen based on the area of the bounding box in screenspace. The core pinciple of the technique is also described [here](http://rastergrid.com/blog/2010/10/hierarchical-z-map-based-occlusion-culling/)
 
 - **Raster (occlusion):**
- As illustrated on [slide 51](http://on-demand.gputechconf.com/siggraph/2014/presentation/SG4117-OpenGL-Scene-Rendering-Techniques.pdf) this algorithm works by rasterizing the bounding box "invisibly". Either a geometry shader, or an instanced vertex shader is used to generate bounding boxes. While color buffer writes are disabled our boxes are still rasterized and tested against the current depth-buffer. Those fragments which pass the depth-test, indicate that our bounding box is visible, and therefore flag the object in a visibility buffer: `visible[objectid] = 1`. Prior the operation that buffer is cleared to zero. This method typically yields better results than *HiZ* as the bounding boxes are tested more accurately as their orientation and dimension is better represented.
+  As illustrated on [slide 51](http://on-demand.gputechconf.com/siggraph/2014/presentation/SG4117-OpenGL-Scene-Rendering-Techniques.pdf) this algorithm works by rasterizing the bounding box "invisibly". While color buffer writes are disabled our boxes are still rasterized and tested against the current depth-buffer. Those fragments which pass the depth-test, indicate that our bounding box is visible, and therefore flag the object in a visibility buffer: `visible[objectid] = 1`. Prior the operation that buffer is cleared to zero. This method typically yields better results than *HiZ* as the bounding boxes are tested more accurately as their orientation and dimension is better represented.
+
+  There are three ways to generate the bboxes (picked in UI as `raster type`) and in all cases only the 3 visible box sides are generated, and there is some per-bounding box culling logic (frustum and pixelsize):
+  - **instanced batches**: Uses a pre-generated `uint16` index buffer that stores (`0x10000/8` many bboxes) and draws the bboxes by first instancing the entire index buffer multiple times, and then a subset of it. The vertex shader generates the appropriate box corner vertex using a pre-computed vertex mapping table depending on the visible side direction vector. Does not benefit from per-bounding box culling that much, otherwise fastest.
+  - **geometry shader**: Uses the vertex-shader to do per-bounding box culling and then geometry-shader to generate one side at a time (using GS instancing). Slower than instanced if no bounding box culling is active.
+  - **mesh shader**: Uses task-shader to do per-bounding box culling and then emits visible bboxes for the mesh-shader to generate the 3 visible sides (8 bboxes per mesh-shader workgroup). Faster than geometry-shader and typically equal perf to instanced batches.
+ 
 
 ![raster](https://github.com/nvpro-samples/gl_occlusion_culling/blob/master/doc/raster.png)
 

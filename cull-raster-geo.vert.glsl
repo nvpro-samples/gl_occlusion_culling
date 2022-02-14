@@ -18,7 +18,7 @@
  */
 
 
-#version 430
+#version 450
 #extension GL_ARB_shading_language_include : enable
 #include "cull-common.h"
 
@@ -36,7 +36,18 @@ layout(binding=CULLSYS_SSBO_MATRICES, std430) readonly buffer matricesBuffer {
 layout(binding=CULLSYS_SSBO_BBOXES, std430) readonly buffer bboxBuffer {
   BboxData bboxes[];
 };
+layout(binding=CULLSYS_SSBO_INPUT_BBOX, std430) readonly buffer bboxIndexBuffer {
+  int bboxIndices[];
+};
+#else
+layout(binding=CULLSYS_SSBO_INPUT_BBOX, std430) readonly buffer bboxBuffer {
+  BboxData bboxes[];
+};
 #endif
+
+layout(binding=CULLSYS_SSBO_INPUT_MATRIX, std430) readonly buffer matrixIndexBuffer {
+  int matrixIndices[];
+};
 
 layout(std430,binding=CULLSYS_SSBO_OUT_VIS) writeonly buffer visibleBuffer {
   int visibles[];
@@ -44,36 +55,35 @@ layout(std430,binding=CULLSYS_SSBO_OUT_VIS) writeonly buffer visibleBuffer {
 
 //////////////////////////////////////////////
 
-#ifdef DUALINDEX
-layout(location=0) in int  bboxIndex;
-layout(location=2) in int  matrixIndex;
-
-vec4 bboxMin = bboxes[bboxIndex].bboxMin;
-vec4 bboxMax = bboxes[bboxIndex].bboxMax;
-#else
-layout(location=0) in vec4 bboxMin;
-layout(location=1) in vec4 bboxMax;
-layout(location=2) in int  matrixIndex;
-#endif
-
-out VertexOut{
+layout(location=0) out VertexOut{
   vec3 bboxCtr;
   vec3 bboxDim;
   flat uint direction_matrixIndex;
-  flat int  objid;
+  flat int  objectID;
 } OUT;
 
 //////////////////////////////////////////////
 
 void main()
 {
-  int objid = gl_VertexID;
+  int objectID = gl_VertexID;
+  
+  int  matrixIndex = matrixIndices[objectID];
+#ifdef DUALINDEX
+  int  bboxIndex   = bboxIndices[objectID];
+#else
+  int  bboxIndex   = objectID;
+#endif
+
+  vec4 bboxMin     = bboxes[bboxIndex].bboxMin;
+  vec4 bboxMax     = bboxes[bboxIndex].bboxMax;
+  
   vec3 ctr =((bboxMin + bboxMax)*0.5).xyz;
   vec3 dim =((bboxMax - bboxMin)*0.5).xyz;
   OUT.bboxCtr               = ctr;
   OUT.bboxDim               = dim;
   OUT.direction_matrixIndex = uint(matrixIndex) << 3;
-  OUT.objid                 = objid;
+  OUT.objectID              = objectID;
   
   
   // if camera is inside the bbox then none of our
@@ -86,9 +96,9 @@ void main()
   localViewPos -= ctr;
   if (all(lessThan(abs(localViewPos),dim))){
     // inside bbox
-    visibles[objid] = 1;
+    visibles[objectID] = 1;
     // skip rasterization of this box
-    OUT.objid = CULL_SKIP_ID;
+    OUT.objectID = CULL_SKIP_ID;
   }
   else {
   // this could be disabled if you don't need it
@@ -119,7 +129,7 @@ void main()
     {
       // invisible
       // skip rasterization of this box
-      OUT.objid = CULL_SKIP_ID;
+      OUT.objectID = CULL_SKIP_ID;
     }
     else 
   #endif

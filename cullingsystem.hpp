@@ -54,8 +54,10 @@ public:
   {
     GLuint object_frustum;
     GLuint object_hiz;
-    GLuint object_raster;
+
     GLuint object_raster_instanced;
+    GLuint object_raster_geo;
+    GLuint object_raster_mesh;
 
     GLuint bit_temporallast;
     GLuint bit_temporalnew;
@@ -69,6 +71,13 @@ public:
     METHOD_HIZ,      // test boxes against hiz texture
     METHOD_RASTER,   // test boxes against current dept-buffer of current fbo
     NUM_METHODS,
+  };
+
+  enum RasterType
+  {
+    RASTER_INSTANCED,
+    RASTER_GEOMETRY_SHADER,
+    RASTER_MESH_SHADER,
   };
 
   enum BitType
@@ -233,9 +242,9 @@ public:
   // - hardware supports GL_NV_representative_fragment_test
 
 
-  void init(const Programs& programs, bool useDualIndex, bool useInstancedRaster, bool hasRepresentativeTest);
+  void init(const Programs& programs, bool useDualIndex, RasterType rasterType, bool hasRepresentativeTest);
   void deinit();
-  void update(const Programs& programs, bool useDualIndex, bool useInstancedRaster, bool hasRepresentativeTest);
+  void update(const Programs& programs, bool useDualIndex, RasterType rasterType, bool hasRepresentativeTest);
 
   // helper function for HiZ method, leaves fbo bound to 0
   // uses internal fbo, naive non-optimized implementation
@@ -263,7 +272,7 @@ public:
   // swaps the Current/Last bit array (for temporal coherent techniques)
   void swapBits(Job& job);
 
-  void useInstancedRaster(bool state);
+  void setRasterType(RasterType rasterType);
 
 private:
   // perform occlusion test for all bounding boxes provided in the job
@@ -276,7 +285,7 @@ private:
   GLuint m_iboInstanced;
   bool   m_useDualIndex;
   bool   m_useRepesentativeTest;
-  bool   m_useInstancedRaster;
+  RasterType   m_rasterType;
 };
 
 #endif

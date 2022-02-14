@@ -122,6 +122,9 @@ struct ViewData {
 
 #define CULLSYS_COMPUTE_THREADS       64
 
+#define CULLSYS_TASK_BATCH            32
+#define CULLSYS_MESH_BATCH            8
+
 // the instanced renderer uses pre-computed uint16_t index buffer for bboxes
 // uint16_t indices provide extra performance on current NVIDIA hardware
 #define CULLSYS_INSTANCED_VERTICES    8

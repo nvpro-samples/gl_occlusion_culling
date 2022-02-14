@@ -18,7 +18,7 @@
  */
 
 
-#version 430
+#version 450
 #extension GL_ARB_shading_language_include : enable
 #include "cull-common.h"
 
@@ -59,7 +59,9 @@ layout(std430,binding=CULLSYS_SSBO_OUT_VIS) writeonly buffer visibleBuffer {
 
 //////////////////////////////////////////////
 
-out flat int objid;
+layout(location=0) out Interpolant {
+  flat int f_objectID;
+} OUT;
 
 //////////////////////////////////////////////
 
@@ -77,8 +79,6 @@ void main()
   
   int boxVertexID = gl_VertexID % (CULLSYS_INSTANCED_VERTICES);
   int objectID    = (gl_VertexID / CULLSYS_INSTANCED_VERTICES) + (gl_InstanceID * CULLSYS_INSTANCED_BBOXES) + objectOffset;
-
-  objid = objectID;
 
   int  matrixIndex = matrixIndices[objectID];
 #ifdef DUALINDEX
@@ -99,7 +99,7 @@ void main()
   localViewPos -= ctr;
   if (all(lessThan(abs(localViewPos),dim))){
     // inside bbox
-    visibles[objid] = 1;
+    visibles[objectID] = 1;
     // skip rasterization of this box
     gl_Position = vec4(-2,-2,-2,1);
   }
@@ -158,7 +158,8 @@ void main()
       uint localMap = vertexMap [directionIndex];
       uint localIdx = (localMap >> (boxVertexID * 4)) & 7;
       
-      gl_Position = worldViewProjTM * getBoxCorner(bboxMin, bboxMax, int(localIdx));
+      OUT.f_objectID  = objectID;
+      gl_Position     = worldViewProjTM * getBoxCorner(bboxMin, bboxMax, int(localIdx));
     }
   }
 }

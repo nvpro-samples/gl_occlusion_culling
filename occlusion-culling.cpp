@@ -57,10 +57,6 @@ int const SAMPLE_MAJOR_VERSION(4);
 int const SAMPLE_MINOR_VERSION(5);
 
 static const GLenum fboFormat = GL_RGBA16F;
-
-// for benchmarking set this higher, influences the total number of objects
-// numObjects = grid * grid * grid
-static const int   grid        = 26;
 static const float globalscale = 8;
 
 static ScanSystem s_scanSys;
@@ -72,9 +68,10 @@ public:
 
   enum GuiEnums
   {
-    GUI_ALGORITHM,
+    GUI_OCC_ALGORITHM,
     GUI_RESULT,
     GUI_DRAW,
+    GUI_RASTER_TYPE,
   };
 
   enum DrawModes
@@ -97,8 +94,8 @@ public:
   {
     nvgl::ProgramID draw_scene,
 
-        object_frustum, object_hiz, object_raster, object_raster_instanced, bit_temporallast, bit_temporalnew,
-        bit_regular, indirect_unordered, depth_mips,
+        object_frustum, object_hiz, object_raster_geo, object_raster_instanced, object_raster_mesh, bit_temporallast,
+        bit_temporalnew, bit_regular, indirect_unordered, depth_mips,
 
         token_sizes, token_cmds,
 
@@ -223,16 +220,19 @@ public:
 
   struct Tweak
   {
-    CullingSystem::MethodType method             = CullingSystem::METHOD_RASTER;
-    ResultType                result             = RESULT_REGULAR_LASTFRAME;
-    DrawModes                 drawmode           = DRAW_STANDARD;
-    bool                      culling            = false;
-    bool                      freeze             = false;
-    bool                      useInstancedRaster = true;
-    bool                      noui               = false;
-    float                     minPixelSize       = 0.0f;
-    float                     animate            = 0;
-    float                     animateOffset      = 0;
+    CullingSystem::MethodType method        = CullingSystem::METHOD_RASTER;
+    CullingSystem::RasterType rasterType    = CullingSystem::RASTER_INSTANCED;
+    ResultType                result        = RESULT_REGULAR_LASTFRAME;
+    DrawModes                 drawmode      = DRAW_STANDARD;
+    bool                      culling       = false;
+    bool                      freeze        = false;
+    bool                      noui          = false;
+    float                     minPixelSize  = 0.0f;
+    float                     animate       = 0;
+    float                     animateOffset = 0;
+    // for benchmarking set this higher, influences the total number of objects
+    // numObjects = grid * grid * grid
+    int grid = 26;
   };
 
   nvgl::ProgramManager m_progManager;
@@ -284,7 +284,7 @@ public:
 
   bool initProgram();
   bool initFramebuffers(int width, int height);
-  bool initScene();
+  bool initScene(int grid);
   void getCullPrograms(CullingSystem::Programs& cullprograms);
   void getScanPrograms(ScanSystem::Programs& scanprograms);
   void systemChange();
@@ -324,14 +324,22 @@ bool Sample::initProgram()
   programs.draw_scene = m_progManager.createProgram(nvgl::ProgramManager::Definition(GL_VERTEX_SHADER, "scene.vert.glsl"),
                                                     nvgl::ProgramManager::Definition(GL_FRAGMENT_SHADER, "scene.frag.glsl"));
 
-  programs.object_raster =
-      m_progManager.createProgram(nvgl::ProgramManager::Definition(GL_VERTEX_SHADER, "cull-raster.vert.glsl"),
-                                  nvgl::ProgramManager::Definition(GL_GEOMETRY_SHADER, "cull-raster.geo.glsl"),
+  programs.object_raster_geo =
+      m_progManager.createProgram(nvgl::ProgramManager::Definition(GL_VERTEX_SHADER, "cull-raster-geo.vert.glsl"),
+                                  nvgl::ProgramManager::Definition(GL_GEOMETRY_SHADER, "cull-raster-geo.geo.glsl"),
                                   nvgl::ProgramManager::Definition(GL_FRAGMENT_SHADER, "cull-raster.frag.glsl"));
 
   programs.object_raster_instanced =
       m_progManager.createProgram(nvgl::ProgramManager::Definition(GL_VERTEX_SHADER, "cull-raster-instanced.vert.glsl"),
                                   nvgl::ProgramManager::Definition(GL_FRAGMENT_SHADER, "cull-raster.frag.glsl"));
+
+  if(has_GL_NV_mesh_shader)
+  {
+    programs.object_raster_mesh =
+        m_progManager.createProgram(nvgl::ProgramManager::Definition(GL_TASK_SHADER_NV, "cull-raster-mesh.task.glsl"),
+                                    nvgl::ProgramManager::Definition(GL_MESH_SHADER_NV, "cull-raster-mesh.mesh.glsl"),
+                                    nvgl::ProgramManager::Definition(GL_FRAGMENT_SHADER, "cull-raster.frag.glsl"));
+  }
 
   programs.object_frustum =
       m_progManager.createProgram(nvgl::ProgramManager::Definition(GL_VERTEX_SHADER, "cull-basic.vert.glsl"));
@@ -385,8 +393,12 @@ void Sample::getCullPrograms(CullingSystem::Programs& cullprograms)
   cullprograms.depth_mips              = m_progManager.get(programs.depth_mips);
   cullprograms.object_frustum          = m_progManager.get(programs.object_frustum);
   cullprograms.object_hiz              = m_progManager.get(programs.object_hiz);
-  cullprograms.object_raster           = m_progManager.get(programs.object_raster);
+  cullprograms.object_raster_geo       = m_progManager.get(programs.object_raster_geo);
   cullprograms.object_raster_instanced = m_progManager.get(programs.object_raster_instanced);
+  if(has_GL_NV_mesh_shader)
+  {
+    cullprograms.object_raster_mesh = m_progManager.get(programs.object_raster_mesh);
+  }
 }
 
 static inline size_t snapdiv(size_t input, size_t align)
@@ -399,7 +411,7 @@ static inline GLuint num32bit(size_t input)
   return GLuint(input / sizeof(GLuint));
 }
 
-bool Sample::initScene()
+bool Sample::initScene(int grid)
 {
   {  // Scene UBO
     nvgl::newBuffer(buffers.scene_ubo);
@@ -759,7 +771,7 @@ bool Sample::begin()
   glBindVertexArray(defaultVAO);
 
   validated = validated && initProgram();
-  validated = validated && initScene();
+  validated = validated && initScene(m_tweak.grid);
   validated = validated && initFramebuffers(m_windowState.m_winSize[0], m_windowState.m_winSize[1]);
 
   if(!validated)
@@ -774,7 +786,7 @@ bool Sample::begin()
   {
     CullingSystem::Programs cullprograms;
     getCullPrograms(cullprograms);
-    m_cullSys.init(cullprograms, false, m_tweak.useInstancedRaster, !!has_GL_NV_representative_fragment_test);
+    m_cullSys.init(cullprograms, false, m_tweak.rasterType, !!has_GL_NV_representative_fragment_test);
 
     m_cullFrameCycle = 0;
 
@@ -824,9 +836,9 @@ bool Sample::begin()
   }
 
   {
-    m_ui.enumAdd(GUI_ALGORITHM, CullingSystem::METHOD_FRUSTUM, "frustum");
-    m_ui.enumAdd(GUI_ALGORITHM, CullingSystem::METHOD_HIZ, "hiz");
-    m_ui.enumAdd(GUI_ALGORITHM, CullingSystem::METHOD_RASTER, "raster");
+    m_ui.enumAdd(GUI_OCC_ALGORITHM, CullingSystem::METHOD_FRUSTUM, "frustum");
+    m_ui.enumAdd(GUI_OCC_ALGORITHM, CullingSystem::METHOD_HIZ, "hiz");
+    m_ui.enumAdd(GUI_OCC_ALGORITHM, CullingSystem::METHOD_RASTER, "raster");
 
     m_ui.enumAdd(GUI_RESULT, RESULT_REGULAR_CURRENT, "regular current frame");
     m_ui.enumAdd(GUI_RESULT, RESULT_REGULAR_LASTFRAME, "regular last frame");
@@ -842,6 +854,13 @@ bool Sample::begin()
     if(m_cmdlistNative)
     {
       m_ui.enumAdd(GUI_DRAW, DRAW_TOKENBUFFER, "nvcmdlist GPU");
+    }
+
+    m_ui.enumAdd(GUI_RASTER_TYPE, CullingSystem::RASTER_INSTANCED, "instanced batches");
+    m_ui.enumAdd(GUI_RASTER_TYPE, CullingSystem::RASTER_GEOMETRY_SHADER, "geometry shader");
+    if(has_GL_NV_mesh_shader)
+    {
+      m_ui.enumAdd(GUI_RASTER_TYPE, CullingSystem::RASTER_MESH_SHADER, "mesh shader");
     }
   }
 
@@ -875,8 +894,8 @@ void Sample::processUI(double time)
     ImGui::Checkbox("culling", &m_tweak.culling);
     ImGui::Checkbox("freeze result", &m_tweak.freeze);
     ImGui::SliderFloat("min.pixelsize", &m_tweak.minPixelSize, 0.0f, 16.0f);
-    m_ui.enumCombobox(GUI_ALGORITHM, "algorithm", &m_tweak.method);
-    ImGui::Checkbox("raster: use instanced", &m_tweak.useInstancedRaster);
+    m_ui.enumCombobox(GUI_OCC_ALGORITHM, "algorithm", &m_tweak.method);
+    m_ui.enumCombobox(GUI_RASTER_TYPE, "raster type", &m_tweak.rasterType);
     m_ui.enumCombobox(GUI_RESULT, "result", &m_tweak.result);
     m_ui.enumCombobox(GUI_DRAW, "drawmode", &m_tweak.drawmode);
     ImGui::SliderFloat("animate", &m_tweak.animate, 0.0f, 32.0f);
@@ -1404,7 +1423,7 @@ void Sample::think(double time)
 
     CullingSystem::Programs cullprograms;
     getCullPrograms(cullprograms);
-    m_cullSys.update(cullprograms, false, m_tweak.useInstancedRaster, !!has_GL_NV_representative_fragment_test);
+    m_cullSys.update(cullprograms, false, m_tweak.rasterType, !!has_GL_NV_representative_fragment_test);
     m_cullJobIndirect.m_program_indirect_compact = m_progManager.get(programs.indirect_unordered);
     m_cullJobToken.program_cmds                  = m_progManager.get(programs.token_cmds);
     m_cullJobToken.program_sizes                 = m_progManager.get(programs.token_sizes);
@@ -1500,7 +1519,7 @@ void Sample::think(double time)
 
   if(m_tweak.culling && !m_tweak.freeze)
   {
-    m_cullSys.useInstancedRaster(m_tweak.useInstancedRaster);
+    m_cullSys.setRasterType(m_tweak.rasterType);
 
     m_cullJobReadback.m_hostVisBits = m_sceneVisBits.data();
 

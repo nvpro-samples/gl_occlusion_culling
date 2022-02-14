@@ -17,7 +17,7 @@
  * SPDX-License-Identifier: Apache-2.0
  */
 
-#version 430
+#version 450
 #extension GL_ARB_shading_language_include : enable
 #include "cull-common.h"
 
@@ -42,20 +42,22 @@ layout(points,invocations=3) in;
 // one side each invocation
 layout(triangle_strip,max_vertices=4) out;
 
-in VertexOut{
+layout(location=0) in VertexOut{
   vec3 bboxCtr;
   vec3 bboxDim;
   flat uint direction_matrixIndex;
-  flat int  objid;
+  flat int  objectID;
 } IN[1];
 
-flat out int objid;
+layout(location=0) out Interpolant {
+  flat int f_objectID;
+} OUT;
 
 ////////////////////////////////////////////
 
 void main()
 {
-  if (IN[0].objid == CULL_SKIP_ID) return;
+  if (IN[0].objectID == CULL_SKIP_ID) return;
   
   uint directionIndex = IN[0].direction_matrixIndex;
   uint matrixIndex    = IN[0].direction_matrixIndex >> 3;
@@ -101,36 +103,36 @@ void main()
   vec3 worldCtr = (worldTM * vec4(IN[0].bboxCtr,1)).xyz;
   
 #if FLIPWIND
-  objid = IN[0].objid;
+  OUT.f_objectID = IN[0].objectID;
   gl_Position = view.viewProjTM * vec4(worldCtr + (faceNormal - edgeBasis0 - edgeBasis1),1);
   EmitVertex();
   
-  objid = IN[0].objid;
+  OUT.f_objectID = IN[0].objectID;
   gl_Position = view.viewProjTM * vec4(worldCtr + (faceNormal + edgeBasis0 - edgeBasis1),1);
   EmitVertex();
   
-  objid = IN[0].objid;
+  OUT.f_objectID = IN[0].objectID;
   gl_Position = view.viewProjTM * vec4(worldCtr + (faceNormal - edgeBasis0 + edgeBasis1),1);
   EmitVertex();
   
-  objid = IN[0].objid;
+  OUT.f_objectID = IN[0].objectID;
   gl_Position = view.viewProjTM * vec4(worldCtr + (faceNormal + edgeBasis0 + edgeBasis1),1);
   EmitVertex();
   
 #else
-  objid = IN[0].objid;
+  OUT.f_objectID = IN[0].objectID;
   gl_Position = view.viewProjTM * vec4(worldCtr + (faceNormal - edgeBasis0 - edgeBasis1),1);
   EmitVertex();
   
-  objid = IN[0].objid;
+  OUT.f_objectID = IN[0].objectID;
   gl_Position = view.viewProjTM * vec4(worldCtr + (faceNormal - edgeBasis0 + edgeBasis1),1);
   EmitVertex();
   
-  objid = IN[0].objid;
+  OUT.f_objectID = IN[0].objectID;
   gl_Position = view.viewProjTM * vec4(worldCtr + (faceNormal + edgeBasis0 - edgeBasis1),1);
   EmitVertex();
   
-  objid = IN[0].objid;
+  OUT.f_objectID = IN[0].objectID;
   gl_Position = view.viewProjTM * vec4(worldCtr + (faceNormal + edgeBasis0 + edgeBasis1),1);
   EmitVertex();
 #endif

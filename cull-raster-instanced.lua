@@ -26,15 +26,6 @@ do
   the reference index buffer is generated for this bbox
   direction signs: + + +
   
-  index_buffer[] = {
-    2, 3, 7,
-    7, 3, 1, 
-    1, 5, 7, 
-    7, 5, 4, 
-    4, 6, 7, 
-    7, 6, 2
-  };
-  
     4_____5
    /.    /|
   6_____7 |
@@ -76,8 +67,6 @@ do
     for v=0,7 do
       local vtx = table[dir+1][v+1]
       
-      local dirHalf = math.floor(dir / 2)
-      
       if (dir < 4) then
         lowerBits[dir + 1] = bit32.bor(lowerBits[dir + 1], bit32.lshift(vtx, v * 4))
       else
@@ -89,4 +78,19 @@ do
   print(string.format("uvec4(0x%Xu, 0x%Xu, 0x%Xu, 0x%Xu);", lowerBits[1],lowerBits[2],lowerBits[3],lowerBits[4]))
   print(string.format("uvec4(0x%Xu, 0x%Xu, 0x%Xu, 0x%Xu);", upperBits[1],upperBits[2],upperBits[3],upperBits[4]))
   
+  local index_buffer = {
+    2, 3, 7, 7, 3, 1, 1, 5, 7, 7, 5, 4, 4, 6, 7, 7, 6, 2
+  };
+  
+  local indexBits = {0,0,0}
+  for face=0,5 do
+    local u32 = math.floor(face / 2) + 1
+    local f   = face % 2
+
+    for v=0,2 do
+      local vtx = index_buffer[face * 3 + v + 1]
+      indexBits[u32] = bit32.bor(indexBits[u32], bit32.lshift(vtx, v * 4 + f * 16))
+    end
+  end
+  print(string.format("uvec3(0x%Xu, 0x%Xu, 0x%Xu);", indexBits[1],indexBits[2],indexBits[3]))
 end

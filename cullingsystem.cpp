@@ -34,9 +34,9 @@ inline unsigned int minDivide(unsigned int val, unsigned int alignment)
   return (val + alignment - 1) / alignment;
 }
 
-void CullingSystem::init(const Programs& programs, bool useDualIndex, bool useInstancedRaster, bool hasRepresentativeTest)
+void CullingSystem::init(const Programs& programs, bool useDualIndex, RasterType rasterType, bool hasRepresentativeTest)
 {
-  update(programs, useDualIndex, useInstancedRaster, hasRepresentativeTest);
+  update(programs, useDualIndex, rasterType, hasRepresentativeTest);
   glGenFramebuffers(1, &m_fbo);
   glGenBuffers(1, &m_ubo);
   glBindBuffer(GL_UNIFORM_BUFFER, m_ubo);
@@ -79,12 +79,12 @@ void CullingSystem::init(const Programs& programs, bool useDualIndex, bool useIn
   free(indices);
 }
 
-void CullingSystem::update(const Programs& programs, bool useDualIndex, bool useInstancedRaster, bool hasRepresentativeTest)
+void CullingSystem::update(const Programs& programs, bool useDualIndex, RasterType rasterType, bool hasRepresentativeTest)
 {
   m_programs             = programs;
   m_useDualIndex         = useDualIndex;
   m_useRepesentativeTest = hasRepresentativeTest;
-  m_useInstancedRaster   = useInstancedRaster;
+  m_rasterType           = rasterType;
 }
 
 void CullingSystem::deinit()
@@ -145,52 +145,19 @@ void CullingSystem::buildDepthMipmaps(GLuint textureDepth, int width, int height
 void CullingSystem::testBboxes(Job& job, bool raster)
 {
   // send the scene's bboxes as points stream
-
-  if(raster && m_useInstancedRaster)
-  {
-    job.m_bufferObjectBbox.BindBufferRange(GL_SHADER_STORAGE_BUFFER, CULLSYS_SSBO_INPUT_BBOX);
-    job.m_bufferObjectMatrix.BindBufferRange(GL_SHADER_STORAGE_BUFFER, CULLSYS_SSBO_INPUT_MATRIX);
-
-    job.m_bufferMatrices.BindBufferRange(GL_SHADER_STORAGE_BUFFER, CULLSYS_SSBO_MATRICES);
-    if(m_useDualIndex)
-    {
-      job.m_bufferBboxes.BindBufferRange(GL_SHADER_STORAGE_BUFFER, CULLSYS_SSBO_BBOXES);
-    }
-
-    glBindBuffer(GL_ELEMENT_ARRAY_BUFFER, m_iboInstanced);
-  }
-  else
-  {
-    glBindBuffer(GL_ARRAY_BUFFER, job.m_bufferObjectBbox.buffer);
-    if(m_useDualIndex)
-    {
-      glVertexAttribIPointer(0, 1, GL_INT, sizeof(int32_t), (const void*)job.m_bufferObjectBbox.offset);
-      glVertexAttribDivisor(0, 0);
-      glEnableVertexAttribArray(0);
-    }
-    else
-    {
-      GLsizei stride = sizeof(float) * 4 * 2;
-      glVertexAttribPointer(0, 4, GL_FLOAT, GL_FALSE, stride, (const void*)job.m_bufferObjectBbox.offset);
-      glVertexAttribDivisor(0, 0);
-      glEnableVertexAttribArray(0);
-      glVertexAttribPointer(1, 4, GL_FLOAT, GL_FALSE, stride, (const void*)(sizeof(float) * 4 + job.m_bufferObjectBbox.offset));
-      glVertexAttribDivisor(1, 0);
-      glEnableVertexAttribArray(1);
-    }
-
-    glBindBuffer(GL_ARRAY_BUFFER, job.m_bufferObjectMatrix.buffer);
-    glVertexAttribIPointer(2, 1, GL_INT, sizeof(int32_t), (const void*)job.m_bufferObjectMatrix.offset);
-    glVertexAttribDivisor(2, 0);
-    glEnableVertexAttribArray(2);
-    glBindBuffer(GL_ARRAY_BUFFER, 0);
-  }
-
   job.m_bufferVisOutput.BindBufferRange(GL_SHADER_STORAGE_BUFFER, CULLSYS_SSBO_OUT_VIS);
   job.m_bufferMatrices.BindBufferRange(GL_SHADER_STORAGE_BUFFER, CULLSYS_SSBO_MATRICES);
   if(m_useDualIndex)
   {
     job.m_bufferBboxes.BindBufferRange(GL_SHADER_STORAGE_BUFFER, CULLSYS_SSBO_BBOXES);
+  }
+
+  job.m_bufferObjectBbox.BindBufferRange(GL_SHADER_STORAGE_BUFFER, CULLSYS_SSBO_INPUT_BBOX);
+  job.m_bufferObjectMatrix.BindBufferRange(GL_SHADER_STORAGE_BUFFER, CULLSYS_SSBO_INPUT_MATRIX);
+
+  if(raster && m_rasterType == RASTER_INSTANCED)
+  {
+    glBindBuffer(GL_ELEMENT_ARRAY_BUFFER, m_iboInstanced);
   }
 
   if(raster)
@@ -210,7 +177,7 @@ void CullingSystem::testBboxes(Job& job, bool raster)
     glEnable(GL_RASTERIZER_DISCARD);
   }
 
-  if(raster && m_useInstancedRaster)
+  if(raster && m_rasterType == RASTER_INSTANCED)
   {
     int instanceCount = job.m_numObjects / CULLSYS_INSTANCED_BBOXES;
     int tailCount     = job.m_numObjects % CULLSYS_INSTANCED_BBOXES;
@@ -224,6 +191,11 @@ void CullingSystem::testBboxes(Job& job, bool raster)
     glDrawElements(GL_TRIANGLES, tailCount * CULLSYS_INSTANCED_INDICES, GL_UNSIGNED_SHORT, nullptr);
 
     glBindBuffer(GL_ELEMENT_ARRAY_BUFFER, 0);
+  }
+  else if (raster && m_rasterType == RASTER_MESH_SHADER)
+  {
+    glUniform1ui(0, job.m_numObjects - 1);
+    glDrawMeshTasksNV(0, (job.m_numObjects + CULLSYS_TASK_BATCH - 1) / CULLSYS_TASK_BATCH);
   }
   else
   {
@@ -322,13 +294,17 @@ void CullingSystem::buildOutput(MethodType method, Job& job, const View& view)
       job.m_bufferVisOutput.BindBufferRange(GL_SHADER_STORAGE_BUFFER, CULLSYS_SSBO_OUT_VIS);
       glClearBufferData(GL_SHADER_STORAGE_BUFFER, GL_R32UI, GL_RED_INTEGER, GL_UNSIGNED_INT, 0);
 
-      if(m_useInstancedRaster)
-      {
+
+      switch(m_rasterType){
+      case RASTER_INSTANCED:
         glUseProgram(m_programs.object_raster_instanced);
-      }
-      else
-      {
-        glUseProgram(m_programs.object_raster);
+        break;
+      case RASTER_GEOMETRY_SHADER:
+        glUseProgram(m_programs.object_raster_geo);
+        break;
+      case RASTER_MESH_SHADER:
+        glUseProgram(m_programs.object_raster_mesh);
+        break;
       }
 
       glEnable(GL_POLYGON_OFFSET_FILL);
@@ -354,9 +330,9 @@ void CullingSystem::swapBits(Job& job)
 }
 
 
-void CullingSystem::useInstancedRaster(bool state)
+void CullingSystem::setRasterType(RasterType rasterType)
 {
-  m_useInstancedRaster = state;
+  m_rasterType = rasterType;
 }
 
 void CullingSystem::JobIndirectUnordered::resultFromBits(const Buffer& bufferVisBitsCurrent)

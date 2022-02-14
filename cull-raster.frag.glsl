@@ -18,7 +18,7 @@
  */
 
 
-#version 430
+#version 450
 #extension GL_ARB_shading_language_include : enable
 #include "cull-common.h"
 
@@ -32,11 +32,13 @@ layout(std430,binding=CULLSYS_SSBO_OUT_VIS) buffer visibleBuffer {
 layout(location=0,index=0) out vec4 out_Color;
 #endif
 
-flat in int objid;
+layout(location=0) in Interpolant {
+  flat int f_objectID;
+} IN;
 
 void main (){
-  visibles[objid] = 1;
+  visibles[IN.f_objectID] = 1;
 #if CULLSYS_DEBUG_VISIBLEBOXES
-  out_Color = unpackUnorm4x8(uint(objid) ^ uint(objid << 4));
+  out_Color = unpackUnorm4x8(uint(IN.f_objectID) ^ uint(IN.f_objectID << 4));
 #endif
 }
