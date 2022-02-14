@@ -27,7 +27,7 @@ The culling itself is implemented in the *cullingsystem.cpp/hpp* files. It uses 
   There are three ways to generate the bboxes (picked in UI as `raster type`) and in all cases only the 3 visible box sides are generated, and there is some per-bounding box culling logic (frustum and pixelsize):
   - **instanced batches**: Uses a pre-generated `uint16` index buffer that stores (`0x10000/8` many bboxes) and draws the bboxes by first instancing the entire index buffer multiple times, and then a subset of it. The vertex shader generates the appropriate box corner vertex using a pre-computed vertex mapping table depending on the visible side direction vector. Does not benefit from per-bounding box culling that much, otherwise fastest.
   - **geometry shader**: Uses the vertex-shader to do per-bounding box culling and then geometry-shader to generate one side at a time (using GS instancing). Slower than instanced if no bounding box culling is active.
-  - **mesh shader**: Uses task-shader to do per-bounding box culling and then emits visible bboxes for the mesh-shader to generate the 3 visible sides (8 bboxes per mesh-shader workgroup). Faster than geometry-shader and typically equal perf to instanced batches.
+  - **mesh shader**: Uses task-shader to do per-bounding box culling and then emits visible bboxes for the mesh-shader to generate the 3 visible sides (8 bboxes per mesh-shader workgroup). Best of both worlds, generates the meshes quickly even when low per-bounding box culling is going on (should be equal to instanced batches then), but faster than both instanced batches and geometry shader with a lot of per-bounding box culling.
  
 
 ![raster](https://github.com/nvpro-samples/gl_occlusion_culling/blob/master/doc/raster.png)
