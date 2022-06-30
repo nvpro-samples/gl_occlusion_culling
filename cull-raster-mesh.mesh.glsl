@@ -73,7 +73,7 @@ layout(std430,binding=CULLSYS_SSBO_OUT_VIS) writeonly buffer visibleBuffer {
 
 taskNV in Task {
   uint      baseID;
-  uint      valid;
+  uint      validCount;
   uint8_t   direction_subID[CULLSYS_TASK_BATCH]; // 3 + 5 bits
 } IN;
 
@@ -96,7 +96,12 @@ void main()
   uint subID          = uint(IN.direction_subID[boxTaskID]) >> 3;
   uint objectID       = IN.baseID + subID;
   
-  bool isValid          = (IN.valid & (1 << objectID)) != 0;
+  // we process CULLSYS_MESH_BATCH boxes in this warp,
+  // however the parent task shader might not have that many valid
+  // outputs. So disable those threads that overshot.
+  bool isValid          = boxTaskID < IN.validCount;
+  // only test first subLaneID of each box, so that subgroupBallotBitCount
+  // returns the actual number of boxes
   uvec4 validVote       = subgroupBallot(subLaneID == 0 && isValid);
   if (laneID == 0)
   {

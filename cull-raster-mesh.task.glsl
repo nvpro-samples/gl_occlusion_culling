@@ -33,7 +33,7 @@
 
 //////////////////////////////////////////////
 
-layout(local_size_x=32) in;
+layout(local_size_x=CULLSYS_TASK_BATCH) in;
 
 //////////////////////////////////////////////
 
@@ -72,7 +72,7 @@ layout(std430,binding=CULLSYS_SSBO_OUT_VIS) writeonly buffer visibleBuffer {
 
 taskNV out Task {
   uint      baseID;
-  uint      valid;
+  uint      validCount;
   uint8_t   direction_subID[CULLSYS_TASK_BATCH]; // 3 + 5 bits
 } OUT;
 
@@ -162,7 +162,7 @@ void main()
   
   if (laneID == 0) {
     OUT.baseID     = gl_WorkGroupID.x * CULLSYS_TASK_BATCH;
-    OUT.valid      = validVote.x;
+    OUT.validCount = validCount;
     gl_TaskCountNV = (validCount + CULLSYS_MESH_BATCH - 1) / CULLSYS_MESH_BATCH;
   }
   
