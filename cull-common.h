@@ -21,7 +21,7 @@
 #ifdef __cplusplus
 namespace cullsys_glsl
 {
-  using namespace nvmath;
+  using namespace glm;
 #endif
 
 struct MatrixData {
@@ -37,9 +37,12 @@ struct BboxData {
 struct ViewData {
   mat4    viewProjTM;
   vec3    viewDir;
+  float   _pad0;
   vec3    viewPos;
+  float   _pad1;
   vec2    viewSize;
   float   viewCullThreshold;
+  float   _pad2;
 };
 
 #ifdef __cplusplus

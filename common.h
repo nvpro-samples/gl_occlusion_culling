@@ -37,7 +37,7 @@
 #ifdef __cplusplus
 namespace ocull
 {
-  using namespace nvmath;
+  using namespace glm;
 #endif
 
 struct SceneData {

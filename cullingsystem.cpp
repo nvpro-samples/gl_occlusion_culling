@@ -24,7 +24,8 @@
 #include <assert.h>
 #include <string.h>
 
-#include <nvmath/nvmath_glsltypes.h>
+#include <glm/glm.hpp>
+
 #include "cull-common.h"
 
 static_assert(sizeof(CullingSystem::View) == sizeof(cullsys_glsl::ViewData), "ViewData glsl/c mismatch");
@@ -394,7 +395,7 @@ void CullingSystem::JobReadbackPersistent::resultClient()
   if(m_fence)
   {
     GLsizeiptr size = sizeof(int) * minDivide(m_numObjects, 32);
-    // as some samples read-back within same frame (not recommended) we use the flush here, normally one wouldn’t use it
+    // as some samples read-back within same frame (not recommended) we use the flush here, normally one wouldnï¿½t use it
     glClientWaitSync(m_fence, GL_SYNC_FLUSH_COMMANDS_BIT, GL_TIMEOUT_IGNORED);
     glDeleteSync(m_fence);
     m_fence = NULL;

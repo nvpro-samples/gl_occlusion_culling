@@ -27,8 +27,6 @@
 #include <imgui/backends/imgui_impl_gl.h>
 #include <imgui/imgui_helper.h>
 
-#include <nvmath/nvmath_glsltypes.h>
-
 #include <nvh/cameracontrol.hpp>
 #include <nvh/geometry.hpp>
 #include <nvh/misc.hpp>
@@ -49,6 +47,8 @@ using namespace nvtoken;
 #include "scansystem.hpp"
 
 #include "common.h"
+#include "glm/gtc/type_ptr.hpp"
+#include "glm/gtc/matrix_access.hpp"
 
 namespace ocull {
 int const SAMPLE_SIZE_WIDTH(800);
@@ -56,8 +56,8 @@ int const SAMPLE_SIZE_HEIGHT(600);
 int const SAMPLE_MAJOR_VERSION(4);
 int const SAMPLE_MINOR_VERSION(5);
 
-static const GLenum fboFormat = GL_RGBA16F;
-static const float globalscale = 8;
+static const GLenum fboFormat   = GL_RGBA16F;
+static const float  globalscale = 8;
 
 static ScanSystem s_scanSys;
 
@@ -159,8 +159,8 @@ public:
 
   struct CullBbox
   {
-    nvmath::vec4 min;
-    nvmath::vec4 max;
+    glm::vec4 min;
+    glm::vec4 max;
   };
 
   struct Geometry
@@ -176,12 +176,12 @@ public:
     {
       position = vertex.position;
       normal   = vertex.normal;
-      color    = nvmath::vec4(1.0f);
+      color    = glm::vec4(1.0f);
     }
 
-    nvmath::vec4 position;
-    nvmath::vec4 normal;
-    nvmath::vec4 color;
+    glm::vec4 position;
+    glm::vec4 normal;
+    glm::vec4 color;
   };
 
   class CullJobToken : public CullingSystem::Job
@@ -246,10 +246,10 @@ public:
 
   SceneData m_sceneUbo;
 
-  std::vector<uint32_t>      m_sceneVisBits;
-  std::vector<DrawCmd>       m_sceneCmds;
-  std::vector<nvmath::mat4f> m_sceneMatrices;
-  std::vector<nvmath::mat4f> m_sceneMatricesAnimated;
+  std::vector<uint32_t>  m_sceneVisBits;
+  std::vector<DrawCmd>   m_sceneCmds;
+  std::vector<glm::mat4> m_sceneMatrices;
+  std::vector<glm::mat4> m_sceneMatricesAnimated;
 
   GLuint      m_numTokens;
   std::string m_tokenStream;
@@ -428,8 +428,7 @@ bool Sample::initScene(int grid)
     for(int i = 0; i < 37; i++)
     {
       const int resmul = 2;
-      mat4      identity;
-      identity.identity();
+      mat4      identity(1);
 
       uint oldverts   = sceneMesh.getVerticesCount();
       uint oldindices = sceneMesh.getTriangleIndicesCount();
@@ -483,7 +482,7 @@ bool Sample::initScene(int grid)
       pos /= float(grid);
 
       float scale;
-      if(nvmath::length(pos) < 0.52f)
+      if(glm::length(pos) < 0.52f)
       {
         scale = globalscale * 0.35f;
         pos *= globalscale * 0.5f;
@@ -494,12 +493,13 @@ bool Sample::initScene(int grid)
         pos *= globalscale;
       }
 
-      mat4 matrix = nvmath::translation_mat4(pos) * nvmath::rotation_mat4_y(nvh::frand() * nv_pi)
-                    * nvmath::scale_mat4((vec3(scale) * (vec3(0.25f) + vec3(nvh::frand(), nvh::frand(), nvh::frand()) * 0.5f))
-                                         / float(grid));
+      mat4 matrix =
+          glm::translate(glm::mat4(1.f), pos) * glm::rotate(glm::mat4(1), nvh::frand() * glm::pi<float>(), glm::vec3(0, 1, 0))
+          * glm::scale(glm::mat4(1.f),
+                       (vec3(scale) * (vec3(0.25f) + vec3(nvh::frand(), nvh::frand(), nvh::frand()) * 0.5f)) / float(grid));
 
       m_sceneMatrices.push_back(matrix);
-      m_sceneMatrices.push_back(nvmath::transpose(nvmath::invert(matrix)));
+      m_sceneMatrices.push_back(glm::transpose(glm::inverse(matrix)));
       matrixIndex.push_back(obj);
 
       // all have same bbox
@@ -868,7 +868,7 @@ bool Sample::begin()
   m_control.m_sceneDimension = float(globalscale) * 2.0f;
   float dist                 = m_control.m_sceneDimension * 0.75f;
   m_control.m_viewMatrix =
-      nvmath::look_at(m_control.m_sceneOrbit - normalize(vec3(1, 0, -1)) * dist, m_control.m_sceneOrbit, vec3(0, 1, 0));
+      glm::lookAt(m_control.m_sceneOrbit - normalize(vec3(1, 0, -1)) * dist, m_control.m_sceneOrbit, vec3(0, 1, 0));
 
   m_statsTime = NVPSystem::getTime();
 
@@ -1160,9 +1160,9 @@ void Sample::drawCullingTemporal(CullingSystem::Job& cullJob)
   view.viewWidth         = float(m_windowState.m_winSize[0]);
   view.viewHeight        = float(m_windowState.m_winSize[1]);
   view.viewCullThreshold = m_tweak.minPixelSize;
-  memcpy(view.viewPos, m_sceneUbo.viewPos.get_value(), sizeof(view.viewPos));
-  memcpy(view.viewDir, m_sceneUbo.viewDir.get_value(), sizeof(view.viewDir));
-  memcpy(view.viewProjMatrix, m_sceneUbo.viewProjMatrix.get_value(), sizeof(view.viewProjMatrix));
+  memcpy(view.viewPos, glm::value_ptr(m_sceneUbo.viewPos), sizeof(view.viewPos));
+  memcpy(view.viewDir, glm::value_ptr(m_sceneUbo.viewDir), sizeof(view.viewDir));
+  memcpy(view.viewProjMatrix, glm::value_ptr(m_sceneUbo.viewProjMatrix), sizeof(view.viewProjMatrix));
 
   switch(m_tweak.method)
   {
@@ -1259,9 +1259,9 @@ void Sample::drawCullingRegular(CullingSystem::Job& cullJob)
   view.viewWidth         = float(m_windowState.m_winSize[0]);
   view.viewHeight        = float(m_windowState.m_winSize[1]);
   view.viewCullThreshold = m_tweak.minPixelSize;
-  memcpy(view.viewPos, m_sceneUbo.viewPos.get_value(), sizeof(view.viewPos));
-  memcpy(view.viewDir, m_sceneUbo.viewDir.get_value(), sizeof(view.viewDir));
-  memcpy(view.viewProjMatrix, m_sceneUbo.viewProjMatrix.get_value(), sizeof(view.viewProjMatrix));
+  memcpy(view.viewPos, glm::value_ptr(m_sceneUbo.viewPos), sizeof(view.viewPos));
+  memcpy(view.viewDir, glm::value_ptr(m_sceneUbo.viewDir), sizeof(view.viewDir));
+  memcpy(view.viewProjMatrix, glm::value_ptr(m_sceneUbo.viewProjMatrix), sizeof(view.viewProjMatrix));
 
   switch(m_tweak.method)
   {
@@ -1339,9 +1339,9 @@ void Sample::drawCullingRegularLastFrame(CullingSystem::Job& cullJob)
   view.viewWidth         = float(m_windowState.m_winSize[0]);
   view.viewHeight        = float(m_windowState.m_winSize[1]);
   view.viewCullThreshold = m_tweak.minPixelSize;
-  memcpy(view.viewPos, m_sceneUbo.viewPos.get_value(), sizeof(view.viewPos));
-  memcpy(view.viewDir, m_sceneUbo.viewDir.get_value(), sizeof(view.viewDir));
-  memcpy(view.viewProjMatrix, m_sceneUbo.viewProjMatrix.get_value(), sizeof(view.viewProjMatrix));
+  memcpy(view.viewPos, glm::value_ptr(m_sceneUbo.viewPos), sizeof(view.viewPos));
+  memcpy(view.viewDir, glm::value_ptr(m_sceneUbo.viewDir), sizeof(view.viewDir));
+  memcpy(view.viewProjMatrix, glm::value_ptr(m_sceneUbo.viewProjMatrix), sizeof(view.viewProjMatrix));
 
   switch(m_tweak.method)
   {
@@ -1409,8 +1409,8 @@ void Sample::think(double time)
 
   processUI(time);
 
-  m_control.processActions(m_windowState.m_winSize,
-                           nvmath::vec2f(m_windowState.m_mouseCurrent[0], m_windowState.m_mouseCurrent[1]),
+  m_control.processActions({m_windowState.m_winSize[0], m_windowState.m_winSize[1]},
+                           glm::vec2(m_windowState.m_mouseCurrent[0], m_windowState.m_mouseCurrent[1]),
                            m_windowState.m_mouseButtonFlags, m_windowState.m_mouseWheel);
 
   if(m_windowState.onPress(KEY_R))
@@ -1486,15 +1486,15 @@ void Sample::think(double time)
 
 
     {  // Update UBO
-      nvmath::mat4 projection = nvmath::perspective((45.f), float(width) / float(height), 0.1f, 100.0f);
-      nvmath::mat4 view       = m_control.m_viewMatrix;
+      glm::mat4 projection = glm::perspectiveRH_ZO((45.f), float(width) / float(height), 0.1f, 100.0f);
+      glm::mat4 view       = m_control.m_viewMatrix;
 
       m_sceneUbo.viewProjMatrix = projection * view;
       m_sceneUbo.viewMatrix     = view;
-      m_sceneUbo.viewMatrixIT   = nvmath::transpose(nvmath::invert(view));
+      m_sceneUbo.viewMatrixIT   = glm::transpose(glm::inverse(view));
 
-      m_sceneUbo.viewPos = m_sceneUbo.viewMatrixIT.row(3);
-      m_sceneUbo.viewDir = -view.row(2);
+      m_sceneUbo.viewPos = glm::row(m_sceneUbo.viewMatrixIT, 3);
+      m_sceneUbo.viewDir = -glm::row(view, 2);
 
       glBindBuffer(GL_UNIFORM_BUFFER, buffers.scene_ubo);
       glBufferSubData(GL_UNIFORM_BUFFER, 0, sizeof(SceneData), &m_sceneUbo);
@@ -1503,13 +1503,13 @@ void Sample::think(double time)
 
   if(m_tweak.animate || m_tweak.animateOffset != m_tweakLast.animateOffset)
   {
-    mat4 rotator = nvmath::rotation_mat4_y(float(time) * 0.1f * m_tweak.animate + m_tweak.animateOffset);
+    mat4 rotator = glm::rotate(glm::mat4(1), float(time) * 0.1f * m_tweak.animate + m_tweak.animateOffset, glm::vec3(0,1,0));
 
     for(size_t i = 0; i < m_sceneMatrices.size() / 2; i++)
     {
       mat4 changed                       = rotator * m_sceneMatrices[i * 2 + 0];
       m_sceneMatricesAnimated[i * 2 + 0] = changed;
-      m_sceneMatricesAnimated[i * 2 + 1] = nvmath::transpose(nvmath::invert(changed));
+      m_sceneMatricesAnimated[i * 2 + 1] = glm::transpose(glm::inverse(changed));
     }
 
     glNamedBufferSubData(buffers.scene_matrices, 0, sizeof(mat4) * m_sceneMatricesAnimated.size(),
